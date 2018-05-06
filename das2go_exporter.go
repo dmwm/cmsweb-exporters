@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	listeningAddress = flag.String("address", ":31200", "Address on which to expose metrics and web interface.")
+	listeningAddress = flag.String("address", ":7200", "Address on which to expose metrics and web interface.")
 	metricsEndpoint  = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI        = flag.String("uri", "", "URI of server status page we're going to scrape")
 	verbose          = flag.Bool("verbose", false, "verbose output")
