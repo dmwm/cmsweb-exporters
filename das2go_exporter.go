@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	namespace = "cmsweb" // For Prometheus metrics.
+	namespace = "das2go" // For Prometheus metrics.
 )
 
 var (
