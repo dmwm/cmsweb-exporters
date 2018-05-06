@@ -4,6 +4,5 @@ go:
   - 1.9
 install:
   - go get github.com/vkuznet/x509proxy
-  - go get github.com/buger/jsonparser
   - go get github.com/prometheus/client_golang/prometheus
   - go get github.com/prometheus/common/log

@@ -14,7 +14,6 @@ import (
 	"os/user"
 	"sync"
 
-	"github.com/buger/jsonparser"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
 	"github.com/vkuznet/x509proxy"
@@ -233,12 +232,8 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 		return fmt.Errorf("Status %s (%d): %s", resp.Status, resp.StatusCode, data)
 	}
-	val, _, _, err := jsonparser.Get(data, "result", "[0]", "status", "server")
-	if err != nil {
-		return fmt.Errorf("Fail to unmarshal JSON data %s", err.Error())
-	}
 	var rec map[string]interface{}
-	err = json.Unmarshal(val, &rec)
+	err = json.Unmarshal(data, &rec)
 	if err != nil {
 		return fmt.Errorf("Fail to unmarshal JSON data %s", err.Error())
 	}
