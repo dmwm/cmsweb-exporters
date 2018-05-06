@@ -238,7 +238,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		return fmt.Errorf("Fail to unmarshal JSON data %s", err.Error())
 	}
 	if *verbose {
-		fmt.Println(string(val))
+		fmt.Println(string(data))
 	}
 	var getCalls, postCalls, getRequests, postRequests float64
 	if v, ok := rec["getCalls"]; ok {
@@ -267,9 +267,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	}
 	if v, ok := rec["CPU"]; ok {
-		cpus := v.([]float64)
+		cpus := v.([]interface{})
 		for _, c := range cpus {
-			cpupct += c
+			cpupct += c.(float64)
 		}
 		cpupct = cpupct / float64(len(cpus)) // take average of all available cores
 	}
