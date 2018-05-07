@@ -12,14 +12,14 @@ following:
 # build das2go exporter
 go build das2go_exporter.go
 
-# call das2go exporter
+# call das2go exporter, default port 7200
 das2go_exporter -uri https://host.cern.ch/das/status
 
 # build wmcore exporter
 go build wmcore_exporter.go
 
 # call wmcore exporter, replace app with your favorite WMCore data-services
-# e.g. dbs or reqmgr2
+# e.g. dbs or reqmgr2, default port 7300
 wmcore_exporter -uri https://host.cern.ch/app/status -namespace app
 ```
 
