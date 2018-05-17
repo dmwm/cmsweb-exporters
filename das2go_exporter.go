@@ -97,7 +97,8 @@ func HttpClient() *http.Client {
 	// get X509 certs
 	certs, err := tlsCerts()
 	if err != nil {
-		panic(err.Error())
+        fmt.Println("unable to get TLS certificate: ", err.Error())
+        return &http.Client{}
 	}
 	if len(certs) == 0 {
 		return &http.Client{}
