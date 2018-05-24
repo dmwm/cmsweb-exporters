@@ -117,12 +117,19 @@ type Exporter struct {
 
 	scrapeFailures prometheus.Counter
 	uptime         *prometheus.Desc
-	connections    *prometheus.GaugeVec
 	memPercent     *prometheus.Desc
-	swapPercent    *prometheus.Desc
+	memVms         *prometheus.Desc
+	memRss         *prometheus.Desc
+	memSwap        *prometheus.Desc
+	memPss         *prometheus.Desc
+	memUss         *prometheus.Desc
 	cpuPercent     *prometheus.Desc
-	numThreads     *prometheus.Desc
-	numFds         *prometheus.Desc
+	cpuSystem      *prometheus.Desc
+	cpuUser        *prometheus.Desc
+	cpuChSystem    *prometheus.Desc
+	cpuChUser      *prometheus.Desc
+	cpuNumber      *prometheus.Desc
+	time           *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -133,13 +140,6 @@ func NewExporter(uri string) *Exporter {
 			"Current uptime in seconds",
 			nil,
 			nil),
-		connections: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Namespace: *namespace,
-			Name:      "connections",
-			Help:      "connection statuses",
-		},
-			[]string{"state"},
-		),
 		memPercent: prometheus.NewDesc(
 			prometheus.BuildFQName(*namespace, "", "memory_percent"),
 			"Virtual memory usage of the server",
@@ -150,14 +150,59 @@ func NewExporter(uri string) *Exporter {
 			"cpu percent of the server",
 			nil,
 			nil),
-		numThreads: prometheus.NewDesc(
-			prometheus.BuildFQName(*namespace, "", "num_threads"),
-			"Number of threads or Go routines",
+		cpuNumber: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "num_cpu"),
+			"Number of CPUs",
 			nil,
 			nil),
-		numFds: prometheus.NewDesc(
-			prometheus.BuildFQName(*namespace, "", "num_fds"),
-			"Number of file descriptors",
+		time: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "time"),
+			"Timestamp of the metric",
+			nil,
+			nil),
+		memVms: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "vms"),
+			"Memory VMS metric",
+			nil,
+			nil),
+		memRss: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "rss"),
+			"Memory RSS metric",
+			nil,
+			nil),
+		memSwap: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "swap"),
+			"Memory Swap metric",
+			nil,
+			nil),
+		memPss: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "pss"),
+			"Memory PSS metric",
+			nil,
+			nil),
+		memUss: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "uss"),
+			"Memory USS metric",
+			nil,
+			nil),
+		cpuSystem: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "cpu_system"),
+			"CPU system metric",
+			nil,
+			nil),
+		cpuUser: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "cpu_user"),
+			"CPU user metric",
+			nil,
+			nil),
+		cpuChSystem: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "cpu_children_system"),
+			"CPU children system metric",
+			nil,
+			nil),
+		cpuChUser: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "cpu_children_user"),
+			"CPU children user metric",
 			nil,
 			nil),
 	}
@@ -167,9 +212,17 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.uptime
 	ch <- e.memPercent
 	ch <- e.cpuPercent
-	ch <- e.numThreads
-	ch <- e.numFds
-	e.connections.Describe(ch)
+	ch <- e.cpuNumber
+	ch <- e.memVms
+	ch <- e.memRss
+	ch <- e.memSwap
+	ch <- e.memPss
+	ch <- e.memUss
+	ch <- e.cpuSystem
+	ch <- e.cpuUser
+	ch <- e.cpuChSystem
+	ch <- e.cpuChUser
+	ch <- e.time
 }
 
 // Collect performs metrics collectio of exporter attributes
@@ -184,88 +237,59 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	return
 }
 
-// HostInfo holds information about host info returned by psutil
-type HostInfo struct {
-	Ip   string //`json:"ip"`
-	Port int64  //`json:"port"`
+// MemoryInfo holds information about memory returned by psutil
+type MemoryInfo struct {
+	Data   int64 `json:"data"`
+	Dirty  int64 `json:"dirty"`
+	Lib    int64 `json:"lib"`
+	Pss    int64 `json:"pss"`
+	Rss    int64 `json:"rss"`
+	Shared int64 `json:"shared"`
+	Swap   int64 `json:"swap"`
+	Text   int64 `json:"text"`
+	Uss    int64 `json:"uss"`
+	Vms    int64 `json:"vms"`
 }
 
-// Connectioninfo holds information about connections returned by psutil
-type ConnectionInfo struct {
-	Fd     int64      //`json:"fd"`
-	Family int64      //`json:"family"`
-	Type   int64      //`json:"type"`
-	Host   []HostInfo //`json:"host"`
-	Status string     //`json:"status"`
+// String dumps MemoryInfo into string object
+func (m *MemoryInfo) String() string {
+	data, _ := json.Marshal(m)
+	return string(data)
 }
 
-// ThreadInfo holds information about threads returned by psutil
-type ThreadInfo struct {
-	Id         int64   //`json:"id"`
-	UserTime   float64 //`json:"user_time"`
-	SystemTime float64 //`json:"system_time"`
+// CPUTimes holds information about CPU metrics
+type CPUTimes struct {
+	ChildrenUser   float64 `json:"children_user"`
+	ChildrenSystem float64 `json:"children_system"`
+	System         float64 `json:"system"`
+	User           float64 `json:"user"`
 }
 
-// OpenFileInfo holds information about open files returned by psutil
-type OpenFileInfo struct {
-	Path string //`json:"path"`
-	Fd   int64  //`json:"fd"`
-}
-
-// MemoryMapInfo holds information about memory returned by psutil
-type MemoryMapInfo struct {
-	Path         string //`json:"path"`
-	Rss          int64  //`json:"rss"`
-	Size         int64  //`json:"size"`
-	Pss          int64  //`json:"pss"`
-	SharedClean  int64  //`json:"shared_clean"`
-	SharedDirty  int64  //`json:"shared_dirty"`
-	PrivateClean int64  //`json:"private_clean"`
-	PrivateDirty int64  //`json:"private_dirty"`
-	Referenced   int64  //`json:"referenced"`
-	Anonymous    int64  //`json:"anonymous"`
-	Swap         int64  //`json:"swap"`
+// String dumps CPUTimes into string object
+func (c *CPUTimes) String() string {
+	data, _ := json.Marshal(c)
+	return string(data)
 }
 
 // ReqMgrMetrics represents metrics used by request manager
 // so far we declare MemoryMapInfo, OpenFileInfo, TheadsInfo and Connectioninfo
 // as generic interfaces since psutil returns list of mixed data-types
 type ReqMgrMetrics struct {
-	Username   string    `json:"username"`
-	Status     string    `json:"status"`
-	Cputimes   []float64 `json:"cputimes"`
-	Timestamp  string    `json:"timestamp"`
-	Pid        int64     `json:"pid"`
-	Uptime     float64   `json:"uptime"`
-	Iocounters []int64   `json:""iocounters`
-	//     Connections    []ConnectionInfo  `json:"connections"`
-	Connections interface{} `json:"connections"`
-	Cmdline     []string    `json:"cmdline"`
-	CreateTime  float64     `json:"create_time"`
-	//     Threads     [][]ThreadInfo `json:"threads"`
-	Threads      interface{} `json:"threads"`
-	MemoryInfoEx []int64     `json:"memory_info_ex"`
-	Ionice       []int64     `json:"ionice"`
-	//     OpenFiles      [][]OpenFileInfo  `json:"open_files"`
-	OpenFiles  interface{} `json:"open_files"`
-	NumFds     int64       `json:"num_fds"`
-	Uids       []int64     `json:"uids"`
-	NumThreads int64       `json:"num_threads"`
-	//     MemoryMaps     [][]MemoryMapInfo `json:"memory_maps"`
-	MemoryMaps     interface{} `json:"memory_maps"`
-	Exe            string      `json:"exe"`
-	Name           string      `json:"name"`
-	CpuPercent     float64     `json:"cpu_percent"`
-	CpuAffinity    []int64     `json:"cpu_affinity"`
-	Gids           []int64     `json:"gids"`
-	Terminal       string      `json:"terminal"`
-	MemoryPercent  float64     `json:"memory_percent"`
-	MemoryInfo     []int64     `json:"memory_info"`
-	NumCtxSwitches []int64     `json:"num_ctx_switches"`
-	Time           float64     `json:"time"`
-	Ppid           int64       `json:"ppid"`
-	Cwd            string      `json:"cwd"`
-	Nice           int64       `json:"nice"`
+	CpuTimes      CPUTimes   `json:"cpu_times"`
+	MemoryPercent float64    `json:"memory_percent"`
+	MemoryInfo    MemoryInfo `json:"memory_full_info"`
+	Uptime        float64    `json:"uptime"`
+	CpuPercent    float64    `json:"cpu_percent"`
+	CpuNum        int64      `json:"cpu_num"`
+	Timestamp     string     `json:"timestamp"`
+	Time          float64    `json:"time"`
+	Pid           int64      `json:"pid"`
+}
+
+// String dumps ReqMgrMetrics into string object
+func (r *ReqMgrMetrics) String() string {
+	data, _ := json.Marshal(r)
+	return string(data)
 }
 
 // MetricsInfo holds server object returned by rquest manager
@@ -273,9 +297,21 @@ type MetricsInfo struct {
 	Server ReqMgrMetrics `json:"server"`
 }
 
+// String dumps MetricsInfo into string object
+func (r *MetricsInfo) String() string {
+	data, _ := json.Marshal(r)
+	return string(data)
+}
+
 // ReqMgrResults holds results object returned by request manager
 type ReqMgrResults struct {
 	Result []MetricsInfo `json:"result"`
+}
+
+// String dumps ReqMgrResults into string object
+func (r *ReqMgrResults) String() string {
+	data, _ := json.Marshal(r)
+	return string(data)
 }
 
 // helper function to parse input data
@@ -286,7 +322,6 @@ func parseData(data []byte) (ReqMgrMetrics, error) {
 	if err != nil {
 		return m, err
 	}
-	fmt.Println(string(data))
 	m = r.Result[0].Server
 	return m, nil
 }
@@ -302,7 +337,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	req.Header.Add("Accept", "application/json")
 	resp, err := _client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Error scraping apache: %v", err)
+		return fmt.Errorf("Error scraping service: %v", err)
 	}
 
 	data, err := ioutil.ReadAll(resp.Body)
@@ -313,25 +348,44 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 		return fmt.Errorf("Status %s (%d): %s", resp.Status, resp.StatusCode, data)
 	}
-    // here we parse input data and extract from it metrics we want to monitor
-    rec := parseData(data)
-	var uptime, mempct, cpupct, nthr, nfds float64
+	// here we parse input data and extract from it metrics we want to monitor
+	rec, err := parseData(data)
+	if err != nil {
+		return fmt.Errorf("Error to parse incoming data: %v", err)
+	}
 
-	ch <- prometheus.MustNewConstMetric(e.uptime, prometheus.CounterValue, uptime)
-	ch <- prometheus.MustNewConstMetric(e.memPercent, prometheus.CounterValue, mempct)
-	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.CounterValue, cpupct)
-	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nthr)
-	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nfds)
+	ch <- prometheus.MustNewConstMetric(e.uptime, prometheus.CounterValue, rec.Uptime)
+	ch <- prometheus.MustNewConstMetric(e.memPercent, prometheus.CounterValue, rec.MemoryPercent)
+	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.CounterValue, rec.CpuPercent)
+	ch <- prometheus.MustNewConstMetric(e.cpuNumber, prometheus.CounterValue, float64(rec.CpuNum))
+	ch <- prometheus.MustNewConstMetric(e.memVms, prometheus.CounterValue, float64(rec.MemoryInfo.Vms))
+	ch <- prometheus.MustNewConstMetric(e.memRss, prometheus.CounterValue, float64(rec.MemoryInfo.Rss))
+	ch <- prometheus.MustNewConstMetric(e.memSwap, prometheus.CounterValue, float64(rec.MemoryInfo.Swap))
+	ch <- prometheus.MustNewConstMetric(e.memPss, prometheus.CounterValue, float64(rec.MemoryInfo.Pss))
+	ch <- prometheus.MustNewConstMetric(e.memUss, prometheus.CounterValue, float64(rec.MemoryInfo.Uss))
+	ch <- prometheus.MustNewConstMetric(e.cpuSystem, prometheus.CounterValue, rec.CpuTimes.System)
+	ch <- prometheus.MustNewConstMetric(e.cpuUser, prometheus.CounterValue, rec.CpuTimes.User)
+	ch <- prometheus.MustNewConstMetric(e.cpuChSystem, prometheus.CounterValue, rec.CpuTimes.ChildrenSystem)
+	ch <- prometheus.MustNewConstMetric(e.cpuChUser, prometheus.CounterValue, rec.CpuTimes.ChildrenUser)
+	ch <- prometheus.MustNewConstMetric(e.time, prometheus.CounterValue, rec.Time)
+
 	return nil
 }
 
 // main function
 func main() {
 	flag.Parse()
-        exporter := NewExporter(*scrapeURI)
-        prometheus.MustRegister(exporter)
+	//     data, _ := ioutil.ReadFile("reqmgr_metrics.json")
+	//     m, e := parseData(data)
+	//     if e != nil {
+	//         fmt.Println(e)
+	//     } else {
+	//         fmt.Println(m.String())
+	//     }
+	exporter := NewExporter(*scrapeURI)
+	prometheus.MustRegister(exporter)
 
-        log.Infof("Starting Server: %s", *listeningAddress)
-        http.Handle(*metricsEndpoint, prometheus.Handler())
-        log.Fatal(http.ListenAndServe(*listeningAddress, nil))
+	log.Infof("Starting Server: %s", *listeningAddress)
+	http.Handle(*metricsEndpoint, prometheus.Handler())
+	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }
