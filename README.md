@@ -21,6 +21,12 @@ go build wmcore_exporter.go
 # call wmcore exporter, replace app with your favorite WMCore data-services
 # e.g. dbs or reqmgr2, default port 7300
 wmcore_exporter -uri https://host.cern.ch/app/status -namespace app
+
+# build process_exporter to monitor specific PID
+go build process_exporter.go
+
+# call process_exporter
+process_exporter -pid <PID> -prefix <my_favorite_process>
 ```
 
 ### References
