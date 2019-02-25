@@ -4,7 +4,7 @@
 # pattern and prefix. It falls into infinitive loop with given interval
 # and restart process_exporter for our pattern process.
 
-usage="Usage: process_monitor.sh <patter> <prefix> <interval>"
+usage="Usage: process_monitor.sh <pattern> <prefix> <port> <interval>"
 if [ $# -ne 3 ]; then
     echo $usage
     exit 1
@@ -17,7 +17,8 @@ fi
 # setup our input parameters
 pat=$1
 prefix=$2
-interval=$3
+port=$3
+interval=$4
 while :
 do
     # find pid of our pattern
@@ -46,7 +47,7 @@ do
 
     # start new process_exporter process
     echo "Starting: process_exporter -pid=$pid -prefix $prefix"
-    nohup process_exporter -pid $pid -prefix $prefix 2>&1 1>& /dev/null < /dev/null &
+    nohup process_exporter -pid $pid -prefix $prefix -port $port 2>&1 1>& /dev/null < /dev/null &
 
     # sleep our interval for next iteration
     sleep $interval

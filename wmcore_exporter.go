@@ -24,7 +24,7 @@ import (
 // )
 
 var (
-	listeningAddress = flag.String("address", ":7300", "Address on which to expose metrics and web interface.")
+	listeningAddress = flag.String("port", ":18000", "port to expose metrics and web interface.")
 	metricsEndpoint  = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI        = flag.String("uri", "", "URI of server status page we're going to scrape")
 	namespace        = flag.String("namespace", "wmcore", "namespace for prometheus metrics")
@@ -98,7 +98,7 @@ func HttpClient() *http.Client {
 	// get X509 certs
 	certs, err := tlsCerts()
 	if err != nil {
-        fmt.Println("unable to get TLS certificate: ", err.Error())
+		fmt.Println("unable to get TLS certificate: ", err.Error())
 		return &http.Client{}
 	}
 	if len(certs) == 0 {

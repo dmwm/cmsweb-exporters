@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	listeningAddress = flag.String("address", ":7200", "Address on which to expose metrics and web interface.")
+	listeningAddress = flag.String("port", ":18217", "port to expose metrics on web interface.")
 	metricsEndpoint  = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI        = flag.String("uri", "", "URI of server status page we're going to scrape")
 	verbose          = flag.Bool("verbose", false, "verbose output")
@@ -97,8 +97,8 @@ func HttpClient() *http.Client {
 	// get X509 certs
 	certs, err := tlsCerts()
 	if err != nil {
-        fmt.Println("unable to get TLS certificate: ", err.Error())
-        return &http.Client{}
+		fmt.Println("unable to get TLS certificate: ", err.Error())
+		return &http.Client{}
 	}
 	if len(certs) == 0 {
 		return &http.Client{}
