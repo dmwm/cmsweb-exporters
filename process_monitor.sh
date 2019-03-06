@@ -5,7 +5,7 @@
 # and restart process_exporter for our pattern process.
 
 usage="Usage: process_monitor.sh <pattern> <prefix> <port> <interval>"
-if [ $# -ne 3 ]; then
+if [ $# -ne 4 ]; then
     echo $usage
     exit 1
 fi
