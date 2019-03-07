@@ -4,9 +4,11 @@
 # pattern and prefix. It falls into infinitive loop with given interval
 # and restart process_exporter for our pattern process.
 
-usage="Usage: process_monitor.sh <pattern> <prefix> <port> <interval>"
+usage="Usage: process_monitor.sh <pattern> <prefix> <address> <interval>"
 if [ $# -ne 4 ]; then
     echo $usage
+    echo "Example: start monitor for scitoken UNIX process on address :18883"
+    echo "process_monitor.sh \".*scitoken\" scitoken \":18883\" 15"
     exit 1
 fi
 if [ "$1" == "-h" ] || [ "$1" == "-help" ] || [ "$1" == "--help" ]; then
@@ -17,7 +19,7 @@ fi
 # setup our input parameters
 pat=$1
 prefix=$2
-port=$3
+address=$3
 interval=$4
 while :
 do
@@ -47,8 +49,8 @@ do
 
     # start new process_exporter process
     echo "Starting: process_exporter -pid=$pid -prefix $prefix"
-    #nohup process_exporter -pid $pid -prefix $prefix -address $port 2>&1 1>& /dev/null < /dev/null &
-    process_exporter -pid $pid -prefix $prefix -address $port
+    #nohup process_exporter -pid $pid -prefix $prefix -address $address 2>&1 1>& /dev/null < /dev/null &
+    process_exporter -pid $pid -prefix $prefix -address $address
 
     # sleep our interval for next iteration
     sleep $interval
