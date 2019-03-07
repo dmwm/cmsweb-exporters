@@ -47,7 +47,8 @@ do
 
     # start new process_exporter process
     echo "Starting: process_exporter -pid=$pid -prefix $prefix"
-    nohup process_exporter -pid $pid -prefix $prefix -port $port 2>&1 1>& /dev/null < /dev/null &
+    #nohup process_exporter -pid $pid -prefix $prefix -address $port 2>&1 1>& /dev/null < /dev/null &
+    process_exporter -pid $pid -prefix $prefix -address $port
 
     # sleep our interval for next iteration
     sleep $interval
