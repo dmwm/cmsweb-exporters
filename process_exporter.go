@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	listeningAddress = flag.String("port", ":17000", "port to expose metrics and web interface.")
+	listeningAddress = flag.String("address", ":17000", "address to expose metrics and web interface.")
 	metricsEndpoint  = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI        = flag.String("uri", "", "URI of server status page we're going to scrape")
 	pid              = flag.Int("pid", 0, "PID of the process to scrape")
