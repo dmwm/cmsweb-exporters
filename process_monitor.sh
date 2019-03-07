@@ -22,7 +22,7 @@ interval=$4
 while :
 do
     # find pid of our pattern
-    pid=`ps auxw | grep "$pat" | grep -v grep | grep -v process_exporter | awk '{print $2}'`
+    pid=`ps auxw | grep "$pat" | grep -v grep | grep -v process_exporter | grep -v process_monitor | awk '{print $2}'`
     if [ -z "$pid" ]; then
         echo "No pattern '$pat' found"
         sleep $interval
