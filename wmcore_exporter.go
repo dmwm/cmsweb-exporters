@@ -122,7 +122,10 @@ type Exporter struct {
 	swapPercent    *prometheus.Desc
 	cpuPercent     *prometheus.Desc
 	numThreads     *prometheus.Desc
-	numFds         *prometheus.Desc
+	openFiles      *prometheus.Desc
+	totCon         *prometheus.Desc
+	lisCon         *prometheus.Desc
+	estCon         *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -155,9 +158,24 @@ func NewExporter(uri string) *Exporter {
 			"Number of threads or Go routines",
 			nil,
 			nil),
-		numFds: prometheus.NewDesc(
-			prometheus.BuildFQName(*namespace, "", "num_fds"),
-			"Number of file descriptors",
+		openFiles: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "open_files"),
+			"Number of open files",
+			nil,
+			nil),
+		totCon: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "total_connections"),
+			"Server TOTAL number of connections",
+			nil,
+			nil),
+		lisCon: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "listen_connections"),
+			"Server LISTEN number of connections",
+			nil,
+			nil),
+		estCon: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "established_connections"),
+			"Server ESTABLISHED number of connections",
 			nil,
 			nil),
 	}
@@ -168,8 +186,10 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.memPercent
 	ch <- e.cpuPercent
 	ch <- e.numThreads
-	ch <- e.numFds
-	e.connections.Describe(ch)
+	ch <- e.openFiles
+	ch <- e.totCon
+	ch <- e.lisCon
+	ch <- e.estCon
 }
 
 // Collect performs metrics collectio of exporter attributes
@@ -225,20 +245,22 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	if v, ok := rec["num_threads"]; ok {
 		nthr = v.(float64)
 	}
-	var nfds float64
-	if v, ok := rec["num_fds"]; ok {
-		nfds = v.(float64)
+	var openFiles float64
+	if v, ok := rec["OpenFiles"]; ok {
+		files := v.([]interface{})
+		openFiles = float64(len(files))
 	}
 	var uptime float64
 	if v, ok := rec["uptime"]; ok {
 		uptime = v.(float64)
 	}
-	if v, ok := rec["connections"]; ok {
+	var totCon, estCon, lisCon float64
+	if v, ok := rec["Connections"]; ok {
 		switch connections := v.(type) {
-		case [][]interface{}:
-			var totCon, estCon, lisCon float64
+		case []interface{}:
 			for _, c := range connections {
-				v := c[len(c)-1].(string)
+				con := c.(map[string]interface{})
+				v, _ := con["status"]
 				switch v {
 				case "ESTABLISHED":
 					estCon += 1
@@ -247,10 +269,6 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				}
 			}
 			totCon = float64(len(connections))
-			e.connections.WithLabelValues("total").Set(totCon)
-			e.connections.WithLabelValues("established").Set(estCon)
-			e.connections.WithLabelValues("listen").Set(lisCon)
-			e.connections.Collect(ch)
 		}
 	}
 
@@ -258,7 +276,10 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.memPercent, prometheus.CounterValue, mempct)
 	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.CounterValue, cpupct)
 	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nthr)
-	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nfds)
+	ch <- prometheus.MustNewConstMetric(e.openFiles, prometheus.CounterValue, openFiles)
+	ch <- prometheus.MustNewConstMetric(e.totCon, prometheus.CounterValue, totCon)
+	ch <- prometheus.MustNewConstMetric(e.lisCon, prometheus.CounterValue, lisCon)
+	ch <- prometheus.MustNewConstMetric(e.estCon, prometheus.CounterValue, estCon)
 	return nil
 }
 
