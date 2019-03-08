@@ -125,6 +125,12 @@ type Exporter struct {
 	swapPercent    *prometheus.Desc
 	cpuPercent     *prometheus.Desc
 	numThreads     *prometheus.Desc
+	numGoroutines  *prometheus.Desc
+	numQueries     *prometheus.Desc
+	load1          *prometheus.Desc
+	load5          *prometheus.Desc
+	load15         *prometheus.Desc
+	openFiles      *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -179,7 +185,32 @@ func NewExporter(uri string) *Exporter {
 			nil),
 		numThreads: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "num_threads"),
-			"Number of threads or Go routines",
+			"Number of threads",
+			nil,
+			nil),
+		numGoroutines: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "num_go_routines"),
+			"Number of Go routines",
+			nil,
+			nil),
+		load1: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "load1"),
+			"Load average in last 1m",
+			nil,
+			nil),
+		load5: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "load5"),
+			"Load average in last 5m",
+			nil,
+			nil),
+		load15: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "load15"),
+			"Load average in last 15m",
+			nil,
+			nil),
+		openFiles: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "open_files"),
+			"Number of open files",
 			nil,
 			nil),
 		//         client: &http.Client{},
@@ -196,6 +227,11 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.swapPercent
 	ch <- e.cpuPercent
 	ch <- e.numThreads
+	ch <- e.numGoroutines
+	ch <- e.load1
+	ch <- e.load5
+	ch <- e.load15
+	ch <- e.openFiles
 	e.connections.Describe(ch)
 }
 
@@ -274,10 +310,30 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 		cpupct = cpupct / float64(len(cpus)) // take average of all available cores
 	}
-	var nthr float64
+	var load1, load5, load15 float64
+	if r, ok := rec["Load"]; ok {
+		load := r.(map[string]interface{})
+		if v, ok := load["load1"]; ok {
+			load1 = v.(float64)
+		}
+		if v, ok := load["load5"]; ok {
+			load5 = v.(float64)
+		}
+		if v, ok := load["load15"]; ok {
+			load15 = v.(float64)
+		}
+	}
+	var openFiles float64
+	if v, ok := rec["openFiles"]; ok {
+		files := v.([]interface{})
+		openFiles = float64(len(files))
+	}
+	var ngo float64
 	if v, ok := rec["NGo"]; ok {
-		nthr = v.(float64)
-	} else if v, ok := rec["NThreads"]; ok {
+		ngo = v.(float64)
+	}
+	var nthr float64
+	if v, ok := rec["NThreads"]; ok {
 		nthr = v.(float64)
 	}
 	var uptime float64
@@ -314,6 +370,11 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.swapPercent, prometheus.CounterValue, swappct)
 	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.CounterValue, cpupct)
 	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nthr)
+	ch <- prometheus.MustNewConstMetric(e.numGoroutines, prometheus.CounterValue, ngo)
+	ch <- prometheus.MustNewConstMetric(e.load1, prometheus.CounterValue, load1)
+	ch <- prometheus.MustNewConstMetric(e.load5, prometheus.CounterValue, load5)
+	ch <- prometheus.MustNewConstMetric(e.load15, prometheus.CounterValue, load15)
+	ch <- prometheus.MustNewConstMetric(e.openFiles, prometheus.CounterValue, openFiles)
 	return nil
 }
 
