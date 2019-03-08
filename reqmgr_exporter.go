@@ -375,13 +375,6 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 // main function
 func main() {
 	flag.Parse()
-	//     data, _ := ioutil.ReadFile("reqmgr_metrics.json")
-	//     m, e := parseData(data)
-	//     if e != nil {
-	//         fmt.Println(e)
-	//     } else {
-	//         fmt.Println(m.String())
-	//     }
 	exporter := NewExporter(*scrapeURI)
 	prometheus.MustRegister(exporter)
 
