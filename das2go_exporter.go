@@ -120,7 +120,9 @@ type Exporter struct {
 	getRequests    *prometheus.Desc
 	postRequests   *prometheus.Desc
 	uptime         *prometheus.Desc
-	connections    *prometheus.GaugeVec
+	totCon         *prometheus.Desc
+	lisCon         *prometheus.Desc
+	estCon         *prometheus.Desc
 	memPercent     *prometheus.Desc
 	swapPercent    *prometheus.Desc
 	cpuPercent     *prometheus.Desc
@@ -161,13 +163,21 @@ func NewExporter(uri string) *Exporter {
 			"Current uptime in seconds",
 			nil,
 			nil),
-		connections: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "connections",
-			Help:      "connection statuses",
-		},
-			[]string{"state"},
-		),
+		totCon: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "total_connections"),
+			"Server TOTAL number of connections",
+			nil,
+			nil),
+		lisCon: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "listen_connections"),
+			"Server LISTEN number of connections",
+			nil,
+			nil),
+		estCon: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "established_connections"),
+			"Server ESTABLISHED number of connections",
+			nil,
+			nil),
 		memPercent: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "memory_percent"),
 			"Virtual memory usage of the server",
@@ -232,7 +242,9 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.load5
 	ch <- e.load15
 	ch <- e.openFiles
-	e.connections.Describe(ch)
+	ch <- e.totCon
+	ch <- e.lisCon
+	ch <- e.estCon
 }
 
 // Collect performs metrics collectio of exporter attributes
@@ -324,7 +336,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	}
 	var openFiles float64
-	if v, ok := rec["openFiles"]; ok {
+	if v, ok := rec["OpenFiles"]; ok {
 		files := v.([]interface{})
 		openFiles = float64(len(files))
 	}
@@ -340,12 +352,13 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	if v, ok := rec["Uptime"]; ok {
 		uptime = v.(float64)
 	}
+	var totCon, estCon, lisCon float64
 	if v, ok := rec["Connections"]; ok {
 		switch connections := v.(type) {
-		case [][]interface{}:
-			var totCon, estCon, lisCon float64
+		case []interface{}:
 			for _, c := range connections {
-				v := c[len(c)-1].(string)
+				con := c.(map[string]interface{})
+				v, _ := con["status"]
 				switch v {
 				case "ESTABLISHED":
 					estCon += 1
@@ -354,10 +367,6 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 				}
 			}
 			totCon = float64(len(connections))
-			e.connections.WithLabelValues("total").Set(totCon)
-			e.connections.WithLabelValues("established").Set(estCon)
-			e.connections.WithLabelValues("listen").Set(lisCon)
-			e.connections.Collect(ch)
 		}
 	}
 
@@ -375,6 +384,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.load5, prometheus.CounterValue, load5)
 	ch <- prometheus.MustNewConstMetric(e.load15, prometheus.CounterValue, load15)
 	ch <- prometheus.MustNewConstMetric(e.openFiles, prometheus.CounterValue, openFiles)
+	ch <- prometheus.MustNewConstMetric(e.totCon, prometheus.CounterValue, totCon)
+	ch <- prometheus.MustNewConstMetric(e.lisCon, prometheus.CounterValue, lisCon)
+	ch <- prometheus.MustNewConstMetric(e.estCon, prometheus.CounterValue, estCon)
 	return nil
 }
 
