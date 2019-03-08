@@ -120,9 +120,6 @@ type Exporter struct {
 	getRequests    *prometheus.Desc
 	postRequests   *prometheus.Desc
 	uptime         *prometheus.Desc
-	totCon         *prometheus.Desc
-	lisCon         *prometheus.Desc
-	estCon         *prometheus.Desc
 	memPercent     *prometheus.Desc
 	swapPercent    *prometheus.Desc
 	cpuPercent     *prometheus.Desc
@@ -133,6 +130,9 @@ type Exporter struct {
 	load5          *prometheus.Desc
 	load15         *prometheus.Desc
 	openFiles      *prometheus.Desc
+	totCon         *prometheus.Desc
+	lisCon         *prometheus.Desc
+	estCon         *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -161,21 +161,6 @@ func NewExporter(uri string) *Exporter {
 		uptime: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "uptime"),
 			"Current uptime in seconds",
-			nil,
-			nil),
-		totCon: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "", "total_connections"),
-			"Server TOTAL number of connections",
-			nil,
-			nil),
-		lisCon: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "", "listen_connections"),
-			"Server LISTEN number of connections",
-			nil,
-			nil),
-		estCon: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "", "established_connections"),
-			"Server ESTABLISHED number of connections",
 			nil,
 			nil),
 		memPercent: prometheus.NewDesc(
@@ -223,7 +208,21 @@ func NewExporter(uri string) *Exporter {
 			"Number of open files",
 			nil,
 			nil),
-		//         client: &http.Client{},
+		totCon: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "total_connections"),
+			"Server TOTAL number of connections",
+			nil,
+			nil),
+		lisCon: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "listen_connections"),
+			"Server LISTEN number of connections",
+			nil,
+			nil),
+		estCon: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "established_connections"),
+			"Server ESTABLISHED number of connections",
+			nil,
+			nil),
 	}
 }
 
