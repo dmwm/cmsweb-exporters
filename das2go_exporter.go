@@ -252,8 +252,8 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
 		log.Errorf("Error scraping: %s", err)
-		e.scrapeFailures.Inc()
-		e.scrapeFailures.Collect(ch)
+		//e.scrapeFailures.Inc()
+		//e.scrapeFailures.Collect(ch)
 	}
 	return
 }
