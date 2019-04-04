@@ -12,6 +12,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/log"
+	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
@@ -30,6 +31,12 @@ var (
 type Exporter struct {
 	URI   string
 	mutex sync.Mutex
+
+	// metrics from process collector
+	cpuTotal        *prometheus.Desc
+	openFDs, maxFDs *prometheus.Desc
+	vsize, maxVsize *prometheus.Desc
+	rss             *prometheus.Desc
 
 	// node specific metrics
 	memPercent  *prometheus.Desc
@@ -57,6 +64,39 @@ type Exporter struct {
 func NewExporter(uri string) *Exporter {
 	return &Exporter{
 		URI: uri,
+		// metrics from process collector
+		cpuTotal: prometheus.NewDesc(
+			*namespace+"process_cpu_seconds_total",
+			"Total user and system CPU time spent in seconds (process collector)",
+			nil, nil,
+		),
+		openFDs: prometheus.NewDesc(
+			*namespace+"process_open_fds",
+			"Number of open file descriptors (process collector)",
+			nil, nil,
+		),
+		maxFDs: prometheus.NewDesc(
+			*namespace+"process_max_fds",
+			"Maximum number of open file descriptors (process collector)",
+			nil, nil,
+		),
+		vsize: prometheus.NewDesc(
+			*namespace+"process_virtual_memory_bytes",
+			"Virtual memory size in bytes (process collector)",
+			nil, nil,
+		),
+		maxVsize: prometheus.NewDesc(
+			*namespace+"process_virtual_memory_max_bytes",
+			"Maximum amount of virtual memory available in bytes (process collector)",
+			nil, nil,
+		),
+		rss: prometheus.NewDesc(
+			*namespace+"process_resident_memory_bytes",
+			"Resident memory size in bytes (process collector)",
+			nil, nil,
+		),
+
+		// custom metrics
 		memPercent: prometheus.NewDesc(
 			prometheus.BuildFQName(*namespace, "", "memory_percent"),
 			"Virtual memory usage of the server",
@@ -151,6 +191,13 @@ func NewExporter(uri string) *Exporter {
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
+	// metrics from process collector
+	ch <- e.cpuTotal
+	ch <- e.openFDs
+	ch <- e.maxFDs
+	ch <- e.vsize
+	ch <- e.maxVsize
+	ch <- e.rss
 	// node specific metrics
 	ch <- e.memPercent
 	ch <- e.memTotal
@@ -208,6 +255,23 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		load5 = l.Load5
 		load15 = l.Load15
 	}
+
+	var cpuTotal, vsize, rss, openFDs, maxFDs, maxVsize float64
+	if proc, err := procfs.NewProc(int(*pid)); err == nil {
+		if stat, err := proc.NewStat(); err == nil {
+			cpuTotal = float64(stat.CPUTime())
+			vsize = float64(stat.VirtualMemory())
+			rss = float64(stat.ResidentMemory())
+		}
+		if fds, err := proc.FileDescriptorsLen(); err == nil {
+			openFDs = float64(fds)
+		}
+		if limits, err := proc.NewLimits(); err == nil {
+			maxFDs = float64(limits.OpenFiles)
+			maxVsize = float64(limits.AddressSpace)
+		}
+	}
+
 	var procCpu, procMem float64
 	var estCon, lisCon, othCon, totCon, openFiles float64
 	var nThreads float64
@@ -239,6 +303,13 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	}
 
+	// metrics from process collector
+	ch <- prometheus.MustNewConstMetric(e.cpuTotal, prometheus.CounterValue, cpuTotal)
+	ch <- prometheus.MustNewConstMetric(e.openFDs, prometheus.CounterValue, openFDs)
+	ch <- prometheus.MustNewConstMetric(e.maxFDs, prometheus.CounterValue, maxFDs)
+	ch <- prometheus.MustNewConstMetric(e.vsize, prometheus.CounterValue, vsize)
+	ch <- prometheus.MustNewConstMetric(e.maxVsize, prometheus.CounterValue, maxVsize)
+	ch <- prometheus.MustNewConstMetric(e.rss, prometheus.CounterValue, rss)
 	// node specific metrics
 	ch <- prometheus.MustNewConstMetric(e.memPercent, prometheus.CounterValue, mempct)
 	ch <- prometheus.MustNewConstMetric(e.memTotal, prometheus.CounterValue, memtot)
