@@ -23,7 +23,7 @@ var (
 	listeningAddress = flag.String("address", ":18000", "address to expose metrics on web interface.")
 	metricsEndpoint  = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI        = flag.String("uri", "", "URI of server status page we're going to scrape")
-	namespace        = flag.String("namespace", "process", "namespace/prefix to use")
+	namespace        = flag.String("prefix", "process_exporter", "namespace/prefix to use")
 	pid              = flag.Int("pid", 0, "PID of the process we're going to scrape")
 	verbose          = flag.Bool("verbose", false, "verbose output")
 )
@@ -66,32 +66,32 @@ func NewExporter(uri string) *Exporter {
 		URI: uri,
 		// metrics from process collector
 		cpuTotal: prometheus.NewDesc(
-			*namespace+"process_cpu_seconds_total",
+			prometheus.BuildFQName(*namespace, "", "process_cpu_seconds_total"),
 			"Total user and system CPU time spent in seconds (process collector)",
 			nil, nil,
 		),
 		openFDs: prometheus.NewDesc(
-			*namespace+"process_open_fds",
+			prometheus.BuildFQName(*namespace, "", "process_open_fds"),
 			"Number of open file descriptors (process collector)",
 			nil, nil,
 		),
 		maxFDs: prometheus.NewDesc(
-			*namespace+"process_max_fds",
+			prometheus.BuildFQName(*namespace, "", "process_max_fds"),
 			"Maximum number of open file descriptors (process collector)",
 			nil, nil,
 		),
 		vsize: prometheus.NewDesc(
-			*namespace+"process_virtual_memory_bytes",
+			prometheus.BuildFQName(*namespace, "", "process_virtual_memory_bytes"),
 			"Virtual memory size in bytes (process collector)",
 			nil, nil,
 		),
 		maxVsize: prometheus.NewDesc(
-			*namespace+"process_virtual_memory_max_bytes",
+			prometheus.BuildFQName(*namespace, "", "process_virtual_memory_max_bytes"),
 			"Maximum amount of virtual memory available in bytes (process collector)",
 			nil, nil,
 		),
 		rss: prometheus.NewDesc(
-			*namespace+"process_resident_memory_bytes",
+			prometheus.BuildFQName(*namespace, "", "process_resident_memory_bytes"),
 			"Resident memory size in bytes (process collector)",
 			nil, nil,
 		),
