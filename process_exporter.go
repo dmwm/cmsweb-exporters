@@ -59,6 +59,8 @@ type Exporter struct {
 	totCon    *prometheus.Desc
 	lisCon    *prometheus.Desc
 	estCon    *prometheus.Desc
+	closeCon  *prometheus.Desc
+	timeCon   *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -187,6 +189,16 @@ func NewExporter(uri string) *Exporter {
 			"Server ESTABLISHED number of connections",
 			nil,
 			nil),
+		closeCon: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "close_wait_connections"),
+			"Server CLOSE_WAIT number of connections",
+			nil,
+			nil),
+		timeCon: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "time_wait_connections"),
+			"Server TIME_WAIT number of connections",
+			nil,
+			nil),
 	}
 }
 
@@ -273,7 +285,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	}
 
 	var procCpu, procMem float64
-	var estCon, lisCon, othCon, totCon, openFiles float64
+	var estCon, lisCon, othCon, totCon, closeCon, timeCon, openFiles float64
 	var nThreads float64
 	if proc, err := process.NewProcess(int32(*pid)); err == nil {
 		if v, e := proc.CPUPercent(); e == nil {
@@ -292,11 +304,15 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 					lisCon += 1
 				} else if v.Status == "ESTABLISHED" {
 					estCon += 1
+				} else if v.Status == "TIME_WAIT" {
+					timeCon += 1
+				} else if v.Status == "CLOSE_WAIT" {
+					closeCon += 1
 				} else {
 					othCon += 1
 				}
 			}
-			totCon = lisCon + estCon + othCon
+			totCon = lisCon + estCon + timeCon + closeCon + othCon
 		}
 		if oFiles, e := proc.OpenFiles(); e == nil {
 			openFiles = float64(len(oFiles))
@@ -330,6 +346,8 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.totCon, prometheus.CounterValue, totCon)
 	ch <- prometheus.MustNewConstMetric(e.lisCon, prometheus.CounterValue, lisCon)
 	ch <- prometheus.MustNewConstMetric(e.estCon, prometheus.CounterValue, estCon)
+	ch <- prometheus.MustNewConstMetric(e.closeCon, prometheus.CounterValue, closeCon)
+	ch <- prometheus.MustNewConstMetric(e.timeCon, prometheus.CounterValue, timeCon)
 	return nil
 }
 
