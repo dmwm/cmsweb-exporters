@@ -1,7 +1,7 @@
 package main
 
 // Author: Valentin Kuznetsov <vkuznet [AT] gmail {DOT} com>
-// CherryPy exporter for prometheus.io
+// CherryPy server metrics based cpstats: exporter for prometheus.io
 
 import (
 	"encoding/json"
