@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/cpu"
@@ -358,6 +359,6 @@ func main() {
 	prometheus.MustRegister(exporter)
 
 	log.Infof("Starting Server: %s", *listeningAddress)
-	http.Handle(*metricsEndpoint, prometheus.Handler())
+	http.Handle(*metricsEndpoint, promhttp.Handler())
 	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }
