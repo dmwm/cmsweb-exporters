@@ -34,9 +34,6 @@ var (
 	verbose           = flag.Bool("verbose", false, "verbose output")
 )
 
-// global HTTP client
-var _client = HttpClient()
-
 // global client's x509 certificates
 var _certs []tls.Certificate
 
@@ -56,7 +53,7 @@ func UserDN(r *http.Request) string {
 }
 
 // client X509 certificates
-func tlsCerts(proxyfile string) ([]tls.Certificate, error) {
+func tlsCerts() ([]tls.Certificate, error) {
 	if len(_certs) != 0 {
 		return _certs, nil // use cached certs
 	}
@@ -64,7 +61,7 @@ func tlsCerts(proxyfile string) ([]tls.Certificate, error) {
 	uckey := os.Getenv("X509_USER_KEY")
 	ucert := os.Getenv("X509_USER_CERT")
 
-	if proxyfile == "" {
+	if *proxyfile == "" {
 		// check if /tmp/x509up_u$UID exists, if so setup X509_USER_PROXY env
 		u, err := user.Current()
 		if err == nil {
@@ -74,12 +71,16 @@ func tlsCerts(proxyfile string) ([]tls.Certificate, error) {
 			}
 		}
 	} else {
-		if _, err := os.Stat(proxyfile); err == nil {
-			uproxy = proxyfile
+		if _, err := os.Stat(*proxyfile); err == nil {
+			uproxy = *proxyfile
 		}
 	}
 	if *verbose {
-		log.Infof(uproxy, uckey, ucert)
+		logs.WithFields(logs.Fields{
+			"proxy": uproxy,
+			"cert":  ucert,
+			"key":   key,
+		}).Info("user credentials")
 	}
 
 	if uproxy == "" && uckey == "" { // user doesn't have neither proxy or user certs
@@ -112,7 +113,7 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 // HttpClient provides HTTP client
 func HttpClient() *http.Client {
 	// get X509 certs
-	certs, err := tlsCerts(*proxyfile)
+	certs, err := tlsCerts()
 	if err != nil {
 		fmt.Println("unable to get TLS certificate: ", err.Error())
 		return &http.Client{}
@@ -176,7 +177,8 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	if *contentType != "" {
 		req.Header.Add("Accept", *contentType)
 	}
-	resp, err := _client.Do(req)
+	client := HttpClient()
+	resp, err := client.Do(req)
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 		if *verbose {
