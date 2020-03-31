@@ -27,6 +27,7 @@ var (
 	listeningAddress  = flag.String("port", ":18000", "port to expose metrics and web interface.")
 	metricsEndpoint   = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI         = flag.String("uri", "", "URI of server status page we're going to scrape")
+	proxyfile         = flag.String("proxyfile", "", "proxy file name")
 	namespace         = flag.String("namespace", "http", "namespace for prometheus metrics")
 	contentType       = flag.String("contentType", "", "ContentType to use for HTTP request")
 	connectionTimeout = flag.Int("connectionTimeout", 3, "connection timeout for HTTP request")
@@ -55,7 +56,7 @@ func UserDN(r *http.Request) string {
 }
 
 // client X509 certificates
-func tlsCerts() ([]tls.Certificate, error) {
+func tlsCerts(proxyfile string) ([]tls.Certificate, error) {
 	if len(_certs) != 0 {
 		return _certs, nil // use cached certs
 	}
@@ -63,12 +64,18 @@ func tlsCerts() ([]tls.Certificate, error) {
 	uckey := os.Getenv("X509_USER_KEY")
 	ucert := os.Getenv("X509_USER_CERT")
 
-	// check if /tmp/x509up_u$UID exists, if so setup X509_USER_PROXY env
-	u, err := user.Current()
-	if err == nil {
-		fname := fmt.Sprintf("/tmp/x509up_u%s", u.Uid)
-		if _, err := os.Stat(fname); err == nil {
-			uproxy = fname
+	if proxyfile == "" {
+		// check if /tmp/x509up_u$UID exists, if so setup X509_USER_PROXY env
+		u, err := user.Current()
+		if err == nil {
+			fname := fmt.Sprintf("/tmp/x509up_u%s", u.Uid)
+			if _, err := os.Stat(fname); err == nil {
+				uproxy = fname
+			}
+		}
+	} else {
+		if _, err := os.Stat(proxyfile); err == nil {
+			uproxy = proxyfile
 		}
 	}
 	if *verbose {
@@ -105,7 +112,7 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 // HttpClient provides HTTP client
 func HttpClient() *http.Client {
 	// get X509 certs
-	certs, err := tlsCerts()
+	certs, err := tlsCerts(*proxyfile)
 	if err != nil {
 		fmt.Println("unable to get TLS certificate: ", err.Error())
 		return &http.Client{}
