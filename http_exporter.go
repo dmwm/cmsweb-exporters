@@ -79,7 +79,7 @@ func tlsCerts() ([]tls.Certificate, error) {
 		logs.WithFields(logs.Fields{
 			"proxy": uproxy,
 			"cert":  ucert,
-			"key":   ukey,
+			"key":   uckey,
 		}).Info("user credentials")
 	}
 
