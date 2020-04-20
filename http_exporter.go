@@ -37,6 +37,8 @@ var (
 // global client's x509 certificates
 var _certs []tls.Certificate
 
+var httpClient *http.Client
+
 // UserDN function parses user Distinguished Name (DN) from client's HTTP request
 func UserDN(r *http.Request) string {
 	var names []interface{}
@@ -177,8 +179,8 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	if *contentType != "" {
 		req.Header.Add("Accept", *contentType)
 	}
-	client := HttpClient()
-	resp, err := client.Do(req)
+	//     client := HttpClient()
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 		if *verbose {
@@ -244,6 +246,7 @@ func main() {
 	flag.Parse()
 	exporter := NewExporter(*scrapeURI)
 	prometheus.MustRegister(exporter)
+	httpClient = HttpClient()
 
 	log.Infof("Starting Server: %s", *listeningAddress)
 	http.Handle(*metricsEndpoint, promhttp.Handler())
