@@ -33,7 +33,7 @@ do
     pid=""
     # if pat is an existing file, e.g. /data/srv/state/reqmgr2/pid
     # we'll use it to find out group pid
-    if [ -f $pat ]; then
+    if [ -f "$pat" ]; then
         gid=`cat $pat`
         pid=`ps -g $gid | grep -v PID | awk '{print $1}' | sort | tail -1`
         if [ -z "$pid" ]; then
@@ -41,7 +41,7 @@ do
         fi
     else
         # find pid of our pattern
-        pid=`ps auxw | grep "$pat" | grep -v grep | grep -v process_exporter | grep -v process_monitor | grep -v rotatelogs | awk '{print $2}'`
+        pid=`ps auxw | grep "$pat" | grep -v grep | grep -v process_exporter | grep -v process_monitor | grep -v rotatelogs | tail -1 | awk '{print $2}'`
     fi
     if [ -z "$pid" ]; then
         echo "No pattern '$pat' found"
