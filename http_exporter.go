@@ -130,7 +130,8 @@ func HttpClient() *http.Client {
 		Dial:              dialTimeout,
 		DisableKeepAlives: true,
 	}
-	return &http.Client{Transport: tr}
+	timeout := time.Duration(*connectionTimeout) * time.Second
+	return &http.Client{Transport: tr, Timeout: timeout}
 }
 
 type Exporter struct {
@@ -179,14 +180,40 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	if *contentType != "" {
 		req.Header.Add("Accept", *contentType)
 	}
-	//     client := HttpClient()
-	resp, err := httpClient.Do(req)
-	if err != nil {
+
+	/*
+		// Example how to organize termination of function
+		// see: https://blog.golang.org/concurrency-timeouts
+
+		// get http response from the site
+		var resp *http.Response
+		var respError error
+		abort := make(chan struct{})
+		go func(r *http.Request) {
+			resp, respError = httpClient.Do(r)
+			abort <- "ok"
+		}(req)
+
+		// try to get response or timeout after connection timeout interval
+		select {
+		case <-abort:
+			// a read from abort channel has occurred, let's close it
+			close(abort)
+		case <-time.After(time.Duration(*connectionTimeout) * time.Second):
+			// the read from ch has timed out
+			msg := fmt.Sprintf("Timeout after %v (sec)", *connectionTimeout)
+			respError = errors.New(msg)
+			close(abort)
+		}
+	*/
+
+	resp, respError := httpClient.Do(req)
+	if respError != nil {
 		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 		if *verbose {
 			logs.WithFields(logs.Fields{
 				"URL":   e.URI,
-				"Error": err,
+				"Error": respError,
 			}).Info("Fail to make HTTP request")
 		}
 		return nil
