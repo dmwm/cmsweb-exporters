@@ -28,6 +28,7 @@ var (
 	metricsEndpoint   = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
 	scrapeURI         = flag.String("uri", "", "URI of server status page we're going to scrape")
 	proxyfile         = flag.String("proxyfile", "", "proxy file name")
+	agent             = flag.String("agent", "", "User-agent to use")
 	namespace         = flag.String("namespace", "http", "namespace for prometheus metrics")
 	contentType       = flag.String("contentType", "", "ContentType to use for HTTP request")
 	connectionTimeout = flag.Int("connectionTimeout", 3, "connection timeout for HTTP request")
@@ -179,6 +180,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	req.Header.Add("Accept-Encoding", "identity")
 	if *contentType != "" {
 		req.Header.Add("Accept", *contentType)
+	}
+	if *agent != "" {
+		req.Header.Add("User-Agent", *agent)
 	}
 
 	/*
