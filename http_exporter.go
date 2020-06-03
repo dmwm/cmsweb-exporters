@@ -212,6 +212,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	*/
 
 	resp, respError := httpClient.Do(req)
+	defer resp.Body.Close()
 	if respError != nil {
 		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 		if *verbose {
@@ -226,7 +227,6 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	val := float64(resp.StatusCode)
 	if *contentType == "application/json" {
 		data, err := ioutil.ReadAll(resp.Body)
-		resp.Body.Close()
 		if resp.StatusCode != 200 {
 			if err != nil {
 				data = []byte(err.Error())
