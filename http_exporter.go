@@ -212,7 +212,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	*/
 
 	resp, respError := httpClient.Do(req)
-	defer resp.Body.Close()
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	if respError != nil {
 		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 		if *verbose {
