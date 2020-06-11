@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -18,27 +19,43 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
-	logs "github.com/sirupsen/logrus"
 	"github.com/vkuznet/x509proxy"
 )
 
 var (
-	listeningAddress  = flag.String("port", ":18000", "port to expose metrics and web interface.")
-	metricsEndpoint   = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
-	scrapeURI         = flag.String("uri", "", "URI of server status page we're going to scrape")
-	proxyfile         = flag.String("proxyfile", "", "proxy file name")
-	agent             = flag.String("agent", "", "User-agent to use")
-	namespace         = flag.String("namespace", "http", "namespace for prometheus metrics")
-	contentType       = flag.String("contentType", "", "ContentType to use for HTTP request")
-	connectionTimeout = flag.Int("connectionTimeout", 3, "connection timeout for HTTP request")
-	verbose           = flag.Bool("verbose", false, "verbose output")
+	listeningAddress    = flag.String("port", ":18000", "port to expose metrics and web interface.")
+	metricsEndpoint     = flag.String("endpoint", "/metrics", "Path under which to expose metrics.")
+	scrapeURI           = flag.String("uri", "", "URI of server status page we're going to scrape")
+	proxyfile           = flag.String("proxyfile", "", "proxy file name")
+	agent               = flag.String("agent", "", "User-agent to use")
+	namespace           = flag.String("namespace", "http", "namespace for prometheus metrics")
+	contentType         = flag.String("contentType", "", "ContentType to use for HTTP request")
+	connectionTimeout   = flag.Int("connectionTimeout", 3, "connection timeout for HTTP request")
+	renewClientInterval = flag.Int("renewClientInterval", 600, "renew interval for http client in seconds")
+	verbose             = flag.Bool("verbose", false, "verbose output")
 )
 
 // global client's x509 certificates
 var _certs []tls.Certificate
 
-var httpClient *http.Client
+type HttpClientMgr struct {
+	Client *http.Client
+	Expire int64
+}
+
+func (h *HttpClientMgr) getHttpClient() *http.Client {
+	if h.Expire < time.Now().Unix() {
+		h.Client = HttpClient()
+		h.Expire = time.Now().Unix() + int64(*renewClientInterval)
+		if *verbose {
+			log.Printf("Renew http client, new expire %+v\n", time.Unix(h.Expire, 0))
+		}
+	}
+	return h.Client
+}
+
+// global http client manager
+var httpClientMgr HttpClientMgr
 
 // UserDN function parses user Distinguished Name (DN) from client's HTTP request
 func UserDN(r *http.Request) string {
@@ -79,11 +96,7 @@ func tlsCerts() ([]tls.Certificate, error) {
 		}
 	}
 	if *verbose {
-		logs.WithFields(logs.Fields{
-			"proxy": uproxy,
-			"cert":  ucert,
-			"key":   uckey,
-		}).Info("user credentials")
+		log.Printf("user credentials: proxy=%s cert=%s ckey=%s\n", uproxy, ucert, uckey)
 	}
 
 	if uproxy == "" && uckey == "" { // user doesn't have neither proxy or user certs
@@ -163,7 +176,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
-		log.Errorf("Error scraping: %s", err)
+		log.Printf("Error scraping: %s\n", err)
 		e.scrapeFailures.Inc()
 		e.scrapeFailures.Collect(ch)
 	}
@@ -211,6 +224,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	*/
 
+	httpClient := httpClientMgr.getHttpClient()
 	resp, respError := httpClient.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()
@@ -218,10 +232,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	if respError != nil {
 		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 		if *verbose {
-			logs.WithFields(logs.Fields{
-				"URL":   e.URI,
-				"Error": respError,
-			}).Info("Fail to make HTTP request")
+			log.Printf("Faile to make HTTP request, url=%s, error=%v\n", e.URI, respError)
 		}
 		return nil
 	}
@@ -235,11 +246,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			}
 			ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, val)
 			if *verbose {
-				logs.WithFields(logs.Fields{
-					"Status": resp.Status,
-					"Code":   resp.StatusCode,
-					"Data":   string(data),
-				}).Info("HTTP request info")
+				log.Printf("HTTP request info, status=%v code=%v data=%s\n", resp.Status, resp.StatusCode, string(data))
 			}
 			return nil
 		}
@@ -251,10 +258,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			err = json.Unmarshal(data, &records)
 			if err != nil {
 				if *verbose {
-					logs.WithFields(logs.Fields{
-						"Error": err.Error(),
-						"Data":  string(data),
-					}).Info("Fail to unmarshal the data")
+					log.Printf("Fail to unmarshal the data, error=%v data=%s\n", err.Error(), string(data))
 				}
 				ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, 0)
 				return nil
@@ -263,9 +267,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			return nil
 		}
 		if *verbose {
-			logs.WithFields(logs.Fields{
-				"Data": string(data),
-			}).Info("received data")
+			log.Println("received data", string(data))
 		}
 	} else {
 		val := float64(resp.StatusCode)
@@ -277,11 +279,17 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 // main function
 func main() {
 	flag.Parse()
+	// log time, filename, and line number
+	if *verbose {
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+	} else {
+		log.SetFlags(log.LstdFlags)
+	}
+
 	exporter := NewExporter(*scrapeURI)
 	prometheus.MustRegister(exporter)
-	httpClient = HttpClient()
 
-	log.Infof("Starting Server: %s", *listeningAddress)
+	log.Printf("Starting Server: %s\n", *listeningAddress)
 	http.Handle(*metricsEndpoint, promhttp.Handler())
 	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }
