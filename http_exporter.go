@@ -45,6 +45,7 @@ type HttpClientMgr struct {
 
 func (h *HttpClientMgr) getHttpClient() *http.Client {
 	if h.Expire < time.Now().Unix() {
+		_certs = []tls.Certificate{} // remove cached certs
 		h.Client = HttpClient()
 		h.Expire = time.Now().Unix() + int64(*renewClientInterval)
 		if *verbose {
