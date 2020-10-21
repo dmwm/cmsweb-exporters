@@ -2,7 +2,7 @@ package main
 
 // cmsweb-ping - Go implementation of ping functionality for cmsweb services based on hmac
 //
-// Copyright (c) 2015-2016 - Valentin Kuznetsov <vkuznet@gmail.com>
+// Copyright (c) 2020 - Valentin Kuznetsov <vkuznet@gmail.com>
 //
 
 import (
