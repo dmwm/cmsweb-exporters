@@ -4,9 +4,14 @@ package main
 // Example of cmsweb data-service exporter for prometheus.io
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"net/http"
+	"os/exec"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,6 +60,7 @@ type Exporter struct {
 
 	//process specific metrics
 	procCpu   *prometheus.Desc
+	topCpu    *prometheus.Desc
 	procMem   *prometheus.Desc
 	openFiles *prometheus.Desc
 	totCon    *prometheus.Desc
@@ -160,6 +166,11 @@ func NewExporter(uri string) *Exporter {
 			"Load average in last 15m",
 			nil,
 			nil),
+		topCpu: prometheus.NewDesc(
+			prometheus.BuildFQName(*namespace, "", "top_cpu"),
+			"process CPU reported by top",
+			nil,
+			nil),
 		procCpu: prometheus.NewDesc(
 			prometheus.BuildFQName(*namespace, "", "proc_cpu"),
 			"process CPU",
@@ -225,6 +236,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.load5
 	ch <- e.load15
 	// process specific metrics
+	ch <- e.topCpu
 	ch <- e.procCpu
 	ch <- e.procMem
 	ch <- e.totCon
@@ -259,8 +271,14 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		swapfree = float64(v.Free)
 	}
 	var cpupct float64
+	// Percent calculates the percentage of cpu used either per CPU or combined.
+	// If an interval of 0 is given it will compare the current cpu times against the last call.
+	// Returns one value per cpu, or a single value if percpu is set to false.
 	if c, e := cpu.Percent(time.Millisecond, false); e == nil {
-		cpupct = c[0] // one value since we didn't ask per cpu
+		for _, v := range c {
+			cpupct += v
+		}
+		//         cpupct = c[0] // one value since we didn't ask per cpu
 	}
 	var load1, load5, load15 float64
 	if l, e := load.Avg(); e == nil {
@@ -271,7 +289,8 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 
 	var cpuTotal, vsize, rss, openFDs, maxFDs, maxVsize float64
 	if proc, err := procfs.NewProc(int(*pid)); err == nil {
-		if stat, err := proc.NewStat(); err == nil {
+		if stat, err := proc.Stat(); err == nil {
+			// CPUTime returns the total CPU user and system time in seconds.
 			cpuTotal = float64(stat.CPUTime())
 			vsize = float64(stat.VirtualMemory())
 			rss = float64(stat.ResidentMemory())
@@ -284,11 +303,17 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			maxVsize = float64(limits.AddressSpace)
 		}
 	}
+	// get cpu usage from top
+	topCpu, err := top(int(*pid))
+	if err != nil {
+		log.Errorf("ERROR: %s", err)
+	}
 
 	var procCpu, procMem float64
 	var estCon, lisCon, othCon, totCon, closeCon, timeCon, openFiles float64
 	var nThreads float64
 	if proc, err := process.NewProcess(int32(*pid)); err == nil {
+		// CPU_Percent returns how many percent of the CPU time this process uses
 		if v, e := proc.CPUPercent(); e == nil {
 			procCpu = float64(v)
 		}
@@ -339,6 +364,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.load5, prometheus.CounterValue, load5)
 	ch <- prometheus.MustNewConstMetric(e.load15, prometheus.CounterValue, load15)
 	// process specific metrics
+	ch <- prometheus.MustNewConstMetric(e.topCpu, prometheus.CounterValue, topCpu)
 	ch <- prometheus.MustNewConstMetric(e.procCpu, prometheus.CounterValue, procCpu)
 	ch <- prometheus.MustNewConstMetric(e.procMem, prometheus.CounterValue, procMem)
 	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nThreads)
@@ -350,6 +376,34 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.closeCon, prometheus.CounterValue, closeCon)
 	ch <- prometheus.MustNewConstMetric(e.timeCon, prometheus.CounterValue, timeCon)
 	return nil
+}
+
+func top(pid int) (float64, error) {
+	if runtime.GOOS != "linux" {
+		msg := fmt.Sprintf("unable to run top single snapshot on %v", runtime.GOOS)
+		return 0, errors.New(msg)
+	}
+	cmd := exec.Command("top", "-b", "-n", "1", "-p", fmt.Sprintf("%d", pid))
+	stdout, err := cmd.Output()
+	if err == nil {
+		return 0, err
+	}
+	arr := strings.Split(string(stdout), "\n")
+	last := arr[len(arr)-2]
+	var fields []string
+	for _, v := range strings.Split(last, " ") {
+		if len(v) > 1 && v != " " {
+			fields = append(fields, v)
+		}
+	}
+	if len(fields) > 6 {
+		cpu, err := strconv.ParseFloat(fields[6], 64)
+		if err != nil {
+			return 0, err
+		}
+		return cpu, nil
+	}
+	return 0, errors.New("insufficient number of fields in top output")
 }
 
 // main function
