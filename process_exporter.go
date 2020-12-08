@@ -385,7 +385,7 @@ func top(pid int) (float64, error) {
 	}
 	cmd := exec.Command("top", "-b", "-n", "1", "-p", fmt.Sprintf("%d", pid))
 	stdout, err := cmd.Output()
-	if err == nil {
+	if err != nil {
 		return 0, err
 	}
 	arr := strings.Split(string(stdout), "\n")
