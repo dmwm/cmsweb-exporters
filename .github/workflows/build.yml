@@ -1,0 +1,64 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.15
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        go get github.com/vkuznet/x509proxy
+        go get github.com/prometheus/client_golang/prometheus
+        go get github.com/prometheus/common/log
+
+    - name: Build
+      run: |
+        go build cmsweb-ping.go
+        go build cpy_exporter.go
+        go build das2go_exporter.go
+        go build eos_exporter.go
+        go build http_exporter.go
+        go build process_exporter.go
+        go build reqmgr_exporter.go
+        go build wmcore_exporter.go
+        mkdir cmsweb-exporters
+        mv cmsweb-ping cpy_exporter das2go_exporter eos_exporter http_exporter process_exporter \
+        reqmgr_exporter wmcore_exporter cmsweb-exporters
+        tar cfz cmsweb-exporters.tar.gz cmsweb-exporters
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload binary
+      id: upload-auth-proxy-server
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./cmsweb-exporters.tar.gz
+        asset_name: cmsweb-exporters.tar.gz
+        asset_content_type: application/octet-stream
