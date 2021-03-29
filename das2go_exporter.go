@@ -115,29 +115,34 @@ type Exporter struct {
 	URI   string
 	mutex sync.Mutex
 
-	scrapeFailures prometheus.Counter
-	getCalls       *prometheus.Desc
-	postCalls      *prometheus.Desc
-	getRequests    *prometheus.Desc
-	postRequests   *prometheus.Desc
-	uptime         *prometheus.Desc
-	memPercent     *prometheus.Desc
-	memTotal       *prometheus.Desc
-	memFree        *prometheus.Desc
-	memUsed        *prometheus.Desc
-	swapPercent    *prometheus.Desc
-	cpuPercent     *prometheus.Desc
-	coresPercent   *prometheus.Desc
-	numThreads     *prometheus.Desc
-	numGoroutines  *prometheus.Desc
-	numQueries     *prometheus.Desc
-	load1          *prometheus.Desc
-	load5          *prometheus.Desc
-	load15         *prometheus.Desc
-	openFiles      *prometheus.Desc
-	totCon         *prometheus.Desc
-	lisCon         *prometheus.Desc
-	estCon         *prometheus.Desc
+	scrapeFailures     prometheus.Counter
+	getCalls           *prometheus.Desc
+	postCalls          *prometheus.Desc
+	getRequests        *prometheus.Desc
+	postRequests       *prometheus.Desc
+	uptime             *prometheus.Desc
+	memPercent         *prometheus.Desc
+	memTotal           *prometheus.Desc
+	memFree            *prometheus.Desc
+	memUsed            *prometheus.Desc
+	memStatsSys        *prometheus.Desc
+	memStatsAlloc      *prometheus.Desc
+	memStatsTotalAlloc *prometheus.Desc
+	memStatsHeapSys    *prometheus.Desc
+	memStatsStackSys   *prometheus.Desc
+	swapPercent        *prometheus.Desc
+	cpuPercent         *prometheus.Desc
+	coresPercent       *prometheus.Desc
+	numThreads         *prometheus.Desc
+	numGoroutines      *prometheus.Desc
+	numQueries         *prometheus.Desc
+	load1              *prometheus.Desc
+	load5              *prometheus.Desc
+	load15             *prometheus.Desc
+	openFiles          *prometheus.Desc
+	totCon             *prometheus.Desc
+	lisCon             *prometheus.Desc
+	estCon             *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -189,6 +194,21 @@ func NewExporter(uri string) *Exporter {
 			"Virtual used memory usage of the server",
 			nil,
 			nil),
+		memStatsSys: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_sys"),
+			"total bytes of memory obtained from the OS", nil, nil),
+		memStatsAlloc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_alloc"),
+			"bytes of allocated heap objects", nil, nil),
+		memStatsTotalAlloc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_tot_alloc"),
+			"cumulative bytes allocated for heap objects", nil, nil),
+		memStatsHeapSys: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_heap_sys"),
+			"bytes of heap memory obtained from the OS", nil, nil),
+		memStatsStackSys: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_stack_sys"),
+			"bytes of stack memory obtained from the OS", nil, nil),
 		swapPercent: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "swap_percent"),
 			"Swap memory usage of the server",
@@ -260,6 +280,11 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.memTotal
 	ch <- e.memFree
 	ch <- e.memUsed
+	ch <- e.memStatsSys
+	ch <- e.memStatsAlloc
+	ch <- e.memStatsTotalAlloc
+	ch <- e.memStatsHeapSys
+	ch <- e.memStatsStackSys
 	ch <- e.swapPercent
 	ch <- e.cpuPercent
 	ch <- e.coresPercent
@@ -345,6 +370,25 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			swappct = v["usedPercent"].(float64)
 		}
 	}
+	var memStatsSys, memStatsAlloc, memStatsTotalAlloc, memStatsHeapSys, memStatsStackSys float64
+	if v, ok := rec["MemStats"]; ok {
+		mem = v.(map[string]interface{})
+		if v, ok := mem["Sys"]; ok {
+			memStatsSys = v.(float64)
+		}
+		if v, ok := mem["Alloc"]; ok {
+			memStatsAlloc = v.(float64)
+		}
+		if v, ok := mem["TotalAlloc"]; ok {
+			memStatsTotalAlloc = v.(float64)
+		}
+		if v, ok := mem["HeapSys"]; ok {
+			memStatsHeapSys = v.(float64)
+		}
+		if v, ok := mem["StackSys"]; ok {
+			memStatsStackSys = v.(float64)
+		}
+	}
 	var cores []float64
 	if v, ok := rec["CPU"]; ok {
 		cpus := v.([]interface{})
@@ -412,6 +456,11 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.memTotal, prometheus.GaugeValue, memtotal)
 	ch <- prometheus.MustNewConstMetric(e.memFree, prometheus.GaugeValue, memfree)
 	ch <- prometheus.MustNewConstMetric(e.memUsed, prometheus.GaugeValue, memused)
+	ch <- prometheus.MustNewConstMetric(e.memStatsSys, prometheus.GaugeValue, memStatsSys)
+	ch <- prometheus.MustNewConstMetric(e.memStatsAlloc, prometheus.GaugeValue, memStatsAlloc)
+	ch <- prometheus.MustNewConstMetric(e.memStatsTotalAlloc, prometheus.GaugeValue, memStatsTotalAlloc)
+	ch <- prometheus.MustNewConstMetric(e.memStatsHeapSys, prometheus.GaugeValue, memStatsHeapSys)
+	ch <- prometheus.MustNewConstMetric(e.memStatsStackSys, prometheus.GaugeValue, memStatsStackSys)
 	ch <- prometheus.MustNewConstMetric(e.swapPercent, prometheus.GaugeValue, swappct)
 	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.GaugeValue, cpupct)
 	for i, v := range cores {
