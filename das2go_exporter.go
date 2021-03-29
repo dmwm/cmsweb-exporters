@@ -122,8 +122,12 @@ type Exporter struct {
 	postRequests   *prometheus.Desc
 	uptime         *prometheus.Desc
 	memPercent     *prometheus.Desc
+	memTotal       *prometheus.Desc
+	memFree        *prometheus.Desc
+	memUsed        *prometheus.Desc
 	swapPercent    *prometheus.Desc
 	cpuPercent     *prometheus.Desc
+	coresPercent   *prometheus.Desc
 	numThreads     *prometheus.Desc
 	numGoroutines  *prometheus.Desc
 	numQueries     *prometheus.Desc
@@ -137,6 +141,7 @@ type Exporter struct {
 }
 
 func NewExporter(uri string) *Exporter {
+	var labels = []string{"cores"}
 	return &Exporter{
 		URI: uri,
 		getCalls: prometheus.NewDesc(
@@ -169,6 +174,21 @@ func NewExporter(uri string) *Exporter {
 			"Virtual memory usage of the server",
 			nil,
 			nil),
+		memTotal: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memory_total"),
+			"Virtual total memory usage of the server",
+			nil,
+			nil),
+		memFree: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memory_free"),
+			"Virtual free memory usage of the server",
+			nil,
+			nil),
+		memUsed: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memory_used"),
+			"Virtual used memory usage of the server",
+			nil,
+			nil),
 		swapPercent: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "swap_percent"),
 			"Swap memory usage of the server",
@@ -179,6 +199,9 @@ func NewExporter(uri string) *Exporter {
 			"cpu percent of the server",
 			nil,
 			nil),
+		coresPercent: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "cores_percent"),
+			"cpu cores percentage on the server", labels, nil),
 		numThreads: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "num_threads"),
 			"Number of threads",
@@ -234,8 +257,12 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.postRequests
 	ch <- e.uptime
 	ch <- e.memPercent
+	ch <- e.memTotal
+	ch <- e.memFree
+	ch <- e.memUsed
 	ch <- e.swapPercent
 	ch <- e.cpuPercent
+	ch <- e.coresPercent
 	ch <- e.numThreads
 	ch <- e.numGoroutines
 	ch <- e.load1
@@ -303,22 +330,28 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		postRequests = v.(float64)
 	}
 	var mem map[string]interface{}
-	var mempct, swappct, cpupct float64
+	var mempct, swappct, cpupct, memtotal, memused, memfree float64
 	if v, ok := rec["Memory"]; ok {
 		mem = v.(map[string]interface{})
 		if r, ok := mem["Virtual"]; ok {
 			v := r.(map[string]interface{})
 			mempct = v["usedPercent"].(float64)
+			memtotal = v["total"].(float64)
+			memused = v["used"].(float64)
+			memfree = v["free"].(float64)
 		}
 		if r, ok := mem["Swap"]; ok {
 			v := r.(map[string]interface{})
 			swappct = v["usedPercent"].(float64)
 		}
 	}
+	var cores []float64
 	if v, ok := rec["CPU"]; ok {
 		cpus := v.([]interface{})
 		for _, c := range cpus {
-			cpupct += c.(float64)
+			val := c.(float64)
+			cpupct += val
+			cores = append(cores, val)
 		}
 		cpupct = cpupct / float64(len(cpus)) // take average of all available cores
 	}
@@ -375,18 +408,25 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.getRequests, prometheus.CounterValue, getRequests)
 	ch <- prometheus.MustNewConstMetric(e.postRequests, prometheus.CounterValue, postRequests)
 	ch <- prometheus.MustNewConstMetric(e.uptime, prometheus.CounterValue, uptime)
-	ch <- prometheus.MustNewConstMetric(e.memPercent, prometheus.CounterValue, mempct)
-	ch <- prometheus.MustNewConstMetric(e.swapPercent, prometheus.CounterValue, swappct)
-	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.CounterValue, cpupct)
-	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.CounterValue, nthr)
-	ch <- prometheus.MustNewConstMetric(e.numGoroutines, prometheus.CounterValue, ngo)
-	ch <- prometheus.MustNewConstMetric(e.load1, prometheus.CounterValue, load1)
-	ch <- prometheus.MustNewConstMetric(e.load5, prometheus.CounterValue, load5)
-	ch <- prometheus.MustNewConstMetric(e.load15, prometheus.CounterValue, load15)
-	ch <- prometheus.MustNewConstMetric(e.openFiles, prometheus.CounterValue, openFiles)
-	ch <- prometheus.MustNewConstMetric(e.totCon, prometheus.CounterValue, totCon)
-	ch <- prometheus.MustNewConstMetric(e.lisCon, prometheus.CounterValue, lisCon)
-	ch <- prometheus.MustNewConstMetric(e.estCon, prometheus.CounterValue, estCon)
+	ch <- prometheus.MustNewConstMetric(e.memPercent, prometheus.GaugeValue, mempct)
+	ch <- prometheus.MustNewConstMetric(e.memTotal, prometheus.GaugeValue, memtotal)
+	ch <- prometheus.MustNewConstMetric(e.memFree, prometheus.GaugeValue, memfree)
+	ch <- prometheus.MustNewConstMetric(e.memUsed, prometheus.GaugeValue, memused)
+	ch <- prometheus.MustNewConstMetric(e.swapPercent, prometheus.GaugeValue, swappct)
+	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.GaugeValue, cpupct)
+	for i, v := range cores {
+		labels := []string{fmt.Sprintf("core-%d", i)}
+		ch <- prometheus.MustNewConstMetric(e.coresPercent, prometheus.GaugeValue, v, labels...)
+	}
+	ch <- prometheus.MustNewConstMetric(e.numThreads, prometheus.GaugeValue, nthr)
+	ch <- prometheus.MustNewConstMetric(e.numGoroutines, prometheus.GaugeValue, ngo)
+	ch <- prometheus.MustNewConstMetric(e.load1, prometheus.GaugeValue, load1)
+	ch <- prometheus.MustNewConstMetric(e.load5, prometheus.GaugeValue, load5)
+	ch <- prometheus.MustNewConstMetric(e.load15, prometheus.GaugeValue, load15)
+	ch <- prometheus.MustNewConstMetric(e.openFiles, prometheus.GaugeValue, openFiles)
+	ch <- prometheus.MustNewConstMetric(e.totCon, prometheus.GaugeValue, totCon)
+	ch <- prometheus.MustNewConstMetric(e.lisCon, prometheus.GaugeValue, lisCon)
+	ch <- prometheus.MustNewConstMetric(e.estCon, prometheus.GaugeValue, estCon)
 	return nil
 }
 
