@@ -129,7 +129,10 @@ type Exporter struct {
 	memStatsAlloc      *prometheus.Desc
 	memStatsTotalAlloc *prometheus.Desc
 	memStatsHeapSys    *prometheus.Desc
+	memStatsHeapInuse  *prometheus.Desc
 	memStatsStackSys   *prometheus.Desc
+	memStatsStackInuse *prometheus.Desc
+	memStatsGCSys      *prometheus.Desc
 	swapPercent        *prometheus.Desc
 	cpuPercent         *prometheus.Desc
 	coresPercent       *prometheus.Desc
@@ -206,9 +209,18 @@ func NewExporter(uri string) *Exporter {
 		memStatsHeapSys: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "memstats_heap_sys"),
 			"bytes of heap memory obtained from the OS", nil, nil),
+		memStatsHeapInuse: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_heap_inuse"),
+			"bytes of heap memory in-use", nil, nil),
 		memStatsStackSys: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "memstats_stack_sys"),
 			"bytes of stack memory obtained from the OS", nil, nil),
+		memStatsStackInuse: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_stack_inuse"),
+			"bytes of stack memory in-use", nil, nil),
+		memStatsGCSys: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "memstats_gcsys"),
+			"bytes of bytes of memory in garbage collection metadata", nil, nil),
 		swapPercent: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "swap_percent"),
 			"Swap memory usage of the server",
@@ -284,7 +296,10 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.memStatsAlloc
 	ch <- e.memStatsTotalAlloc
 	ch <- e.memStatsHeapSys
+	ch <- e.memStatsHeapInuse
 	ch <- e.memStatsStackSys
+	ch <- e.memStatsStackInuse
+	ch <- e.memStatsGCSys
 	ch <- e.swapPercent
 	ch <- e.cpuPercent
 	ch <- e.coresPercent
@@ -371,6 +386,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		}
 	}
 	var memStatsSys, memStatsAlloc, memStatsTotalAlloc, memStatsHeapSys, memStatsStackSys float64
+	var memStatsHeapInuse, memStatsStackInuse, memStatsGCSys float64
 	if v, ok := rec["MemStats"]; ok {
 		mem = v.(map[string]interface{})
 		if v, ok := mem["Sys"]; ok {
@@ -385,8 +401,17 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 		if v, ok := mem["HeapSys"]; ok {
 			memStatsHeapSys = v.(float64)
 		}
+		if v, ok := mem["HeapInuse"]; ok {
+			memStatsHeapInuse = v.(float64)
+		}
 		if v, ok := mem["StackSys"]; ok {
 			memStatsStackSys = v.(float64)
+		}
+		if v, ok := mem["StackInuse"]; ok {
+			memStatsStackInuse = v.(float64)
+		}
+		if v, ok := mem["GCSys"]; ok {
+			memStatsGCSys = v.(float64)
 		}
 	}
 	var cores []float64
@@ -460,7 +485,10 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.memStatsAlloc, prometheus.GaugeValue, memStatsAlloc)
 	ch <- prometheus.MustNewConstMetric(e.memStatsTotalAlloc, prometheus.GaugeValue, memStatsTotalAlloc)
 	ch <- prometheus.MustNewConstMetric(e.memStatsHeapSys, prometheus.GaugeValue, memStatsHeapSys)
+	ch <- prometheus.MustNewConstMetric(e.memStatsHeapInuse, prometheus.GaugeValue, memStatsHeapInuse)
 	ch <- prometheus.MustNewConstMetric(e.memStatsStackSys, prometheus.GaugeValue, memStatsStackSys)
+	ch <- prometheus.MustNewConstMetric(e.memStatsStackInuse, prometheus.GaugeValue, memStatsStackInuse)
+	ch <- prometheus.MustNewConstMetric(e.memStatsGCSys, prometheus.GaugeValue, memStatsGCSys)
 	ch <- prometheus.MustNewConstMetric(e.swapPercent, prometheus.GaugeValue, swappct)
 	ch <- prometheus.MustNewConstMetric(e.cpuPercent, prometheus.GaugeValue, cpupct)
 	for i, v := range cores {
