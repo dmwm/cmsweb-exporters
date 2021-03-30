@@ -146,6 +146,12 @@ type Exporter struct {
 	totCon             *prometheus.Desc
 	lisCon             *prometheus.Desc
 	estCon             *prometheus.Desc
+
+	// metrics from process collector
+	cpuTotal        *prometheus.Desc
+	openFDs, maxFDs *prometheus.Desc
+	vsize, maxVsize *prometheus.Desc
+	rss             *prometheus.Desc
 }
 
 func NewExporter(uri string) *Exporter {
@@ -279,6 +285,37 @@ func NewExporter(uri string) *Exporter {
 			"Server ESTABLISHED number of connections",
 			nil,
 			nil),
+		// metrics from process collector
+		cpuTotal: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "cpu_seconds_total"),
+			"Total user and system CPU time spent in seconds (process collector)",
+			nil, nil,
+		),
+		openFDs: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "open_fds"),
+			"Number of open file descriptors (process collector)",
+			nil, nil,
+		),
+		maxFDs: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "max_fds"),
+			"Maximum number of open file descriptors (process collector)",
+			nil, nil,
+		),
+		vsize: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "virtual_memory_bytes"),
+			"Virtual memory size in bytes (process collector)",
+			nil, nil,
+		),
+		maxVsize: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "virtual_memory_max_bytes"),
+			"Maximum amount of virtual memory available in bytes (process collector)",
+			nil, nil,
+		),
+		rss: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "resident_memory_bytes"),
+			"Resident memory size in bytes (process collector)",
+			nil, nil,
+		),
 	}
 }
 
@@ -312,6 +349,13 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.totCon
 	ch <- e.lisCon
 	ch <- e.estCon
+	// metrics from process collector
+	ch <- e.cpuTotal
+	ch <- e.openFDs
+	ch <- e.maxFDs
+	ch <- e.vsize
+	ch <- e.maxVsize
+	ch <- e.rss
 }
 
 // Collect performs metrics collectio of exporter attributes
@@ -471,6 +515,25 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 			totCon = float64(len(connections))
 		}
 	}
+	var cpuTotal, openFDs, maxFDs, vsize, maxVsize, rss float64
+	if v, ok := rec["cpuTotal"]; ok {
+		cpuTotal = v.(float64)
+	}
+	if v, ok := rec["openFDs"]; ok {
+		openFDs = v.(float64)
+	}
+	if v, ok := rec["maxFDs"]; ok {
+		maxFDs = v.(float64)
+	}
+	if v, ok := rec["vsize"]; ok {
+		vsize = v.(float64)
+	}
+	if v, ok := rec["maxVsize"]; ok {
+		maxVsize = v.(float64)
+	}
+	if v, ok := rec["rss"]; ok {
+		rss = v.(float64)
+	}
 
 	ch <- prometheus.MustNewConstMetric(e.getCalls, prometheus.CounterValue, getCalls)
 	ch <- prometheus.MustNewConstMetric(e.postCalls, prometheus.CounterValue, postCalls)
@@ -504,6 +567,13 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.totCon, prometheus.GaugeValue, totCon)
 	ch <- prometheus.MustNewConstMetric(e.lisCon, prometheus.GaugeValue, lisCon)
 	ch <- prometheus.MustNewConstMetric(e.estCon, prometheus.GaugeValue, estCon)
+	// metrics from process collector
+	ch <- prometheus.MustNewConstMetric(e.cpuTotal, prometheus.CounterValue, cpuTotal)
+	ch <- prometheus.MustNewConstMetric(e.openFDs, prometheus.CounterValue, openFDs)
+	ch <- prometheus.MustNewConstMetric(e.maxFDs, prometheus.CounterValue, maxFDs)
+	ch <- prometheus.MustNewConstMetric(e.vsize, prometheus.CounterValue, vsize)
+	ch <- prometheus.MustNewConstMetric(e.maxVsize, prometheus.CounterValue, maxVsize)
+	ch <- prometheus.MustNewConstMetric(e.rss, prometheus.CounterValue, rss)
 	return nil
 }
 
