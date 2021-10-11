@@ -8,13 +8,13 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 )
 
 const (
@@ -208,7 +208,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
-		log.Errorf("Error scraping: %s", err)
+		log.Fatalf("Error scraping: %s", err)
 	}
 	return
 }
@@ -328,7 +328,7 @@ func main() {
 	exporter := NewExporter(*scrapeURI)
 	prometheus.MustRegister(exporter)
 
-	log.Infof("Starting Server: %s", *listeningAddress)
+	log.Printf("Starting Server: %s", *listeningAddress)
 	http.Handle(*metricsEndpoint, promhttp.Handler())
 	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }
