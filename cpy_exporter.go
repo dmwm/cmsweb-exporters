@@ -208,7 +208,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
-		log.Fatalf("Error scraping: %s", err)
+		log.Printf("Error scraping: %s", err)
 	}
 	return
 }
