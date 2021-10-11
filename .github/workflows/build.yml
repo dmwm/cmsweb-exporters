@@ -24,7 +24,7 @@ jobs:
       run: |
         go get github.com/vkuznet/x509proxy
         go get github.com/prometheus/client_golang/prometheus
-        go get github.com/prometheus/common/log
+        go get github.com/prometheus/common
         go get github.com/shirou/gopsutil/process
         go get github.com/shirou/gopsutil/mem
         go get github.com/shirou/gopsutil/load
