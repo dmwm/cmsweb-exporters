@@ -45,6 +45,7 @@ jobs:
         reqmgr_exporter wmcore_exporter cmsweb-exporters
         tar cfz cmsweb-exporters.tar.gz cmsweb-exporters
 
+
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -66,3 +67,28 @@ jobs:
         asset_path: ./cmsweb-exporters.tar.gz
         asset_name: cmsweb-exporters.tar.gz
         asset_content_type: application/octet-stream
+
+
+
+    - name: Build image
+      run: |
+        curl -ksLO https://raw.githubusercontent.com/dmwm/CMSKubernetes/master/docker/exporters/Dockerfile
+        docker build . --tag docker.pkg.github.com/dmwm/cmsweb-exporters/cmsweb-exporters
+        docker tag docker.pkg.github.com/dmwm/cmsweb-exporters/cmsweb-exporters registry.cern.ch/cmsweb/exporters
+
+    - name: Login to registry.cern.ch
+      uses: docker/login-action@v1.6.0
+      with:
+        registry: registry.cern.ch
+        username: ${{ secrets.CERN_LOGIN }}
+        password: ${{ secrets.CERN_TOKEN }}
+
+    - name: Publish image to registry.cern.ch
+      uses: docker/build-push-action@v1
+      with:
+        username: ${{ secrets.CERN_LOGIN }}
+        password: ${{ secrets.CERN_TOKEN }}
+        registry: registry.cern.ch
+        repository: cmsweb/exporters
+        tag_with_ref: true
+
