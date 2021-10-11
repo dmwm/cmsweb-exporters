@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os/exec"
 	"runtime"
@@ -17,7 +18,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/load"
@@ -251,7 +251,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
-		log.Errorf("Error scraping: %s", err)
+		log.Printf("Error scraping: %s", err)
 	}
 	return
 }
@@ -306,7 +306,7 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	// get cpu usage from top
 	topCpu, err := top(int(*pid))
 	if err != nil {
-		log.Errorf("ERROR: %s", err)
+		log.Printf("ERROR: %s", err)
 	}
 
 	var procCpu, procMem float64
@@ -412,7 +412,7 @@ func main() {
 	exporter := NewExporter(*scrapeURI)
 	prometheus.MustRegister(exporter)
 
-	log.Infof("Starting Server: %s", *listeningAddress)
+	log.Printf("Starting Server: %s", *listeningAddress)
 	http.Handle(*metricsEndpoint, promhttp.Handler())
 	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }

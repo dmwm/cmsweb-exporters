@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/user"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/log"
 	"github.com/vkuznet/x509proxy"
 )
 
@@ -71,7 +71,7 @@ func tlsCerts() ([]tls.Certificate, error) {
 		}
 	}
 	if *verbose {
-		log.Infof(uproxy, uckey, ucert)
+		log.Printf(uproxy, uckey, ucert)
 	}
 
 	if uproxy == "" && uckey == "" { // user doesn't have neither proxy or user certs
@@ -231,7 +231,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock() // To protect metrics from concurrent collects.
 	defer e.mutex.Unlock()
 	if err := e.collect(ch); err != nil {
-		log.Errorf("Error scraping: %s", err)
+		log.Printf("Error scraping: %s", err)
 		e.scrapeFailures.Inc()
 		e.scrapeFailures.Collect(ch)
 	}
@@ -379,7 +379,7 @@ func main() {
 	exporter := NewExporter(*scrapeURI)
 	prometheus.MustRegister(exporter)
 
-	log.Infof("Starting Server: %s", *listeningAddress)
+	log.Printf("Starting Server: %s", *listeningAddress)
 	http.Handle(*metricsEndpoint, promhttp.Handler())
 	log.Fatal(http.ListenAndServe(*listeningAddress, nil))
 }
