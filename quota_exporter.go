@@ -214,9 +214,9 @@ func main() {
 	var endpoint string
 	flag.StringVar(&endpoint, "endpoint", "/metrics", "Path under which to expose metrics.")
 	var namespace string
-	flag.StringVar(&namespace, "namespace", "default", "namespace to use for exporter")
+	flag.StringVar(&namespace, "namespace", "openstack_quota", "namespace to use for exporter")
 	var scriptPath string
-	flag.StringVar(&scriptPath, "script", "quota.sh", "bash script file name")
+	flag.StringVar(&scriptPath, "script", "cmsweb-exporters/quota.sh", "bash script file name")
 	var envFile string
 	flag.StringVar(&envFile, "env", "/etc/secrets/env.sh", "env.sh")
 	flag.Parse()
