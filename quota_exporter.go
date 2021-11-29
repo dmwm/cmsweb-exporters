@@ -24,13 +24,16 @@ type QuotaRecords struct {
 	VolumesUsed         int64 `json:"volumes_used"`
 	TotalVolumeSize     int64 `json:"total_volume_size"`
 	TotalVolumeSizeUsed int64 `json:"total_volume_size_used"`
+	TotalShares         int64 `json:"total_shares"`
 	SharesUsed          int64 `json:"shares_used"`
+	SharesSize          int64 `json:"shares_size"`
 	SharesSizeUsed      int64 `json:"shares_size_used"`
 }
 
 // Exporter represents Prometheus exporter structure
 type Exporter struct {
 	scriptName     string
+	envFile        string
 	mutex          sync.Mutex
 	scrapeFailures prometheus.Counter
 
@@ -44,14 +47,17 @@ type Exporter struct {
 	volumesUsed         *prometheus.Desc
 	totalVolumeSize     *prometheus.Desc
 	totalVolumeSizeUsed *prometheus.Desc
+	totalShares         *prometheus.Desc
 	sharesUsed          *prometheus.Desc
+	sharesSize          *prometheus.Desc
 	sharesSizeUsed      *prometheus.Desc
 	timestamp           *prometheus.Desc
 }
 
-func NewExporter(namespace, scriptName string) *Exporter {
+func NewExporter(namespace, scriptName, envFile string) *Exporter {
 	return &Exporter{
 		scriptName:     scriptName,
+		envFile:        envFile,
 		scrapeFailures: prometheus.NewCounter(prometheus.CounterOpts{}),
 		totalCpus: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "total_cpus"),
@@ -103,8 +109,18 @@ func NewExporter(namespace, scriptName string) *Exporter {
 			"",
 			nil,
 			nil),
+		totalShares: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "total_shares"),
+			"",
+			nil,
+			nil),
 		sharesUsed: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "", "shares_used"),
+			"",
+			nil,
+			nil),
+		sharesSize: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", "shares_size"),
 			"",
 			nil,
 			nil),
@@ -132,7 +148,9 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.volumesUsed
 	ch <- e.totalVolumeSize
 	ch <- e.totalVolumeSizeUsed
+	ch <- e.totalShares
 	ch <- e.sharesUsed
+	ch <- e.sharesSize
 	ch <- e.sharesSizeUsed
 	ch <- e.timestamp
 
@@ -150,9 +168,9 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	return
 }
 
-func run(scriptName string) QuotaRecords {
+func run(scriptPath, envFile string) QuotaRecords {
 	var record QuotaRecords
-	command := exec.Command("/bin/bash", scriptName)
+	command := exec.Command("/bin/bash", scriptPath, envFile)
 	stdout, err := command.Output()
 	if err != nil {
 		log.Fatal(err)
@@ -167,7 +185,7 @@ func run(scriptName string) QuotaRecords {
 // helper function which collects exporter attributes
 func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	// extract records
-	records := run(e.scriptName)
+	records := run(e.scriptName, e.envFile)
 	timestamp := time.Now().Unix()
 	ch <- prometheus.MustNewConstMetric(e.totalCpus, prometheus.CounterValue, float64(records.TotalCpus))
 	ch <- prometheus.MustNewConstMetric(e.cpusUsed, prometheus.CounterValue, float64(records.CpusUsed))
@@ -179,7 +197,9 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(e.volumesUsed, prometheus.CounterValue, float64(records.VolumesUsed))
 	ch <- prometheus.MustNewConstMetric(e.totalVolumeSize, prometheus.CounterValue, float64(records.TotalVolumeSize))
 	ch <- prometheus.MustNewConstMetric(e.totalVolumeSizeUsed, prometheus.CounterValue, float64(records.TotalVolumeSizeUsed))
+	ch <- prometheus.MustNewConstMetric(e.totalShares, prometheus.CounterValue, float64(records.TotalShares))
 	ch <- prometheus.MustNewConstMetric(e.sharesUsed, prometheus.CounterValue, float64(records.SharesUsed))
+	ch <- prometheus.MustNewConstMetric(e.sharesSize, prometheus.CounterValue, float64(records.SharesSize))
 	ch <- prometheus.MustNewConstMetric(e.sharesSizeUsed, prometheus.CounterValue, float64(records.SharesSizeUsed))
 	ch <- prometheus.MustNewConstMetric(e.timestamp, prometheus.CounterValue, float64(timestamp))
 
@@ -195,8 +215,10 @@ func main() {
 	flag.StringVar(&endpoint, "endpoint", "/metrics", "Path under which to expose metrics.")
 	var namespace string
 	flag.StringVar(&namespace, "namespace", "default", "namespace to use for exporter")
-	var scriptName string
-	flag.StringVar(&scriptName, "script-name", "quota.sh", "bash script file name")
+	var scriptPath string
+	flag.StringVar(&scriptPath, "script", "quota.sh", "bash script file name")
+	var envFile string
+	flag.StringVar(&envFile, "env", "/etc/secrets/env.sh", "env.sh")
 	flag.Parse()
 	if verbose > 0 {
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -204,7 +226,7 @@ func main() {
 		log.SetFlags(log.LstdFlags)
 	}
 
-	exporter := NewExporter(namespace, scriptName)
+	exporter := NewExporter(namespace, scriptPath, envFile)
 	prometheus.MustRegister(exporter)
 
 	log.Printf("Starting Server: %s\n", listeningAddress)
