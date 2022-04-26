@@ -31,7 +31,7 @@ var (
 	namespace           = flag.String("namespace", "http", "namespace for prometheus metrics")
 	contentType         = flag.String("contentType", "", "ContentType to use for HTTP request")
 	connectionTimeout   = flag.Int("connectionTimeout", 3, "connection timeout for HTTP request")
-	renewClientInterval = flag.Int("renewClientInterval", 600, "renew interval for http client in seconds")
+	renewClientInterval = flag.Int("renewClientInterval", 600, "renew interval for http client in seconds. If proxy is not needed, please provide 0 or negative integer")
 	verbose             = flag.Bool("verbose", false, "verbose output")
 )
 
@@ -44,7 +44,10 @@ type HttpClientMgr struct {
 }
 
 func (h *HttpClientMgr) getHttpClient() *http.Client {
-	if h.Expire < time.Now().Unix() {
+	// No need to renew proxy auth or set expiration
+	if int(*renewClientInterval) <= 0 {
+		h.Client = HttpClient()
+	} else if h.Expire < time.Now().Unix() {
 		_certs = []tls.Certificate{} // remove cached certs
 		h.Client = HttpClient()
 		h.Expire = time.Now().Unix() + int64(*renewClientInterval)
@@ -58,23 +61,12 @@ func (h *HttpClientMgr) getHttpClient() *http.Client {
 // global http client manager
 var httpClientMgr HttpClientMgr
 
-// UserDN function parses user Distinguished Name (DN) from client's HTTP request
-func UserDN(r *http.Request) string {
-	var names []interface{}
-	for _, cert := range r.TLS.PeerCertificates {
-		for _, name := range cert.Subject.Names {
-			switch v := name.Value.(type) {
-			case string:
-				names = append(names, v)
-			}
-		}
-	}
-	parts := names[:7]
-	return fmt.Sprintf("/DC=%s/DC=%s/OU=%s/OU=%s/CN=%s/CN=%s/CN=%s", parts...)
-}
-
 // client X509 certificates
 func tlsCerts() ([]tls.Certificate, error) {
+	// No need to renew proxy auth
+	if int(*renewClientInterval) <= 0 {
+		return nil, nil
+	}
 	if len(_certs) != 0 {
 		return _certs, nil // use cached certs
 	}
@@ -101,7 +93,7 @@ func tlsCerts() ([]tls.Certificate, error) {
 	}
 
 	if uproxy == "" && uckey == "" { // user doesn't have neither proxy or user certs
-		return nil, fmt.Errorf("Neither proxy or user certs are found, please setup X509 environment variables")
+		return nil, fmt.Errorf("neither proxy or user certs are found, please setup X509 environment variables")
 	}
 	if uproxy != "" {
 		// use local implementation of LoadX409KeyPair instead of tls one
@@ -239,18 +231,19 @@ func (e *Exporter) collect(ch chan<- prometheus.Metric) error {
 	}
 
 	val := float64(resp.StatusCode)
-	if *contentType == "application/json" {
-		data, err := ioutil.ReadAll(resp.Body)
-		if resp.StatusCode != 200 {
-			if err != nil {
-				data = []byte(err.Error())
-			}
-			ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, val)
-			if *verbose {
-				log.Printf("HTTP request info, status=%v code=%v data=%s\n", resp.Status, resp.StatusCode, string(data))
-			}
-			return nil
+	data, err := ioutil.ReadAll(resp.Body)
+	// Stdout response body if not successful
+	if resp.StatusCode != 200 {
+		if err != nil {
+			data = []byte(err.Error())
 		}
+		ch <- prometheus.MustNewConstMetric(e.status, prometheus.CounterValue, val)
+		if *verbose {
+			log.Printf("HTTP request info, status=%v code=%v data=%s\n", resp.Status, resp.StatusCode, string(data))
+		}
+		return nil
+	}
+	if *contentType == "application/json" {
 		var rec map[string]interface{}
 		err = json.Unmarshal(data, &rec)
 		if err != nil {
